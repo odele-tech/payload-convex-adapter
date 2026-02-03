@@ -55,6 +55,8 @@ export async function queryDrafts(props: AdapterQueryDraftsProps) {
     pagination = true,
   } = incomingQueryDrafts;
 
+  service.system.logger("queryDrafts").dir();
+
   // Combine the where clause with draft status filter
   const draftWhere: Where = where
     ? {

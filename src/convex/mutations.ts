@@ -346,7 +346,7 @@ export function convexPatch(props: ConvexPatchProps) {
           .logger("No ID provided for patch operation - cancelling operation")
           .warn();
 
-      const result = await ctx.db.patch(args.id as any, args.data);
+      await ctx.db.patch(args.id as any, args.data);
 
       service.system
         .logger(
@@ -354,7 +354,7 @@ export function convexPatch(props: ConvexPatchProps) {
             {
               operation: "patch",
               args: args,
-              result: result,
+              success: true,
             },
             null,
             2
@@ -362,7 +362,7 @@ export function convexPatch(props: ConvexPatchProps) {
         )
         .log();
 
-      return result;
+      return null;
     },
   });
 }
@@ -473,7 +473,7 @@ export function convexReplace(props: ConvexReplaceProps) {
     },
     handler: async (ctx, args) => {
       // Transform data to Convex format before replacing
-      const result = await ctx.db.replace(args.id as any, args.data);
+      await ctx.db.replace(args.id as any, args.data);
 
       service.system
         .logger(
@@ -481,7 +481,7 @@ export function convexReplace(props: ConvexReplaceProps) {
             {
               operation: "replace",
               args: args,
-              result: result,
+              success: true,
             },
             null,
             2
@@ -489,7 +489,7 @@ export function convexReplace(props: ConvexReplaceProps) {
         )
         .log();
 
-      return result;
+      return null;
     },
   });
 }
@@ -578,7 +578,7 @@ export type AdapterDeleteProps = {
  * Result type for delete operations.
  */
 export type ConvexDeleteResult = ExtractConvexMutationResult<
-  ReturnType<typeof convexDelete>
+  ReturnType<typeof convexDeleteOp>
 >;
 
 /**
@@ -589,14 +589,14 @@ export type ConvexDeleteResult = ExtractConvexMutationResult<
  * @param {AdapterService} props.service - The adapter service instance
  * @returns {RegisteredMutation} A Convex mutation function that deletes a document
  */
-export function convexDelete(props: ConvexDeleteProps) {
+export function convexDeleteOp(props: ConvexDeleteProps) {
   const { service } = props;
   return mutationGeneric({
     args: {
       id: v.string(),
     },
     handler: async (ctx, args) => {
-      const result = await ctx.db.delete(args.id as any);
+      await ctx.db.delete(args.id as any);
 
       service.system
         .logger(
@@ -604,7 +604,7 @@ export function convexDelete(props: ConvexDeleteProps) {
             {
               operation: "delete",
               args: args,
-              result: result,
+              success: true,
             },
             null,
             2
@@ -612,7 +612,7 @@ export function convexDelete(props: ConvexDeleteProps) {
         )
         .log();
 
-      return result;
+      return null;
     },
   });
 }
@@ -626,7 +626,7 @@ export function convexDelete(props: ConvexDeleteProps) {
  * @param {string} props.id - The document ID to delete
  * @returns {Promise<ConvexDeleteResult>} The result of the delete operation
  */
-export async function adapterDelete(props: AdapterDeleteProps) {
+export async function adapterDeleteOp(props: AdapterDeleteProps) {
   const { service, id } = props;
 
   if (service.system.isDev) {
@@ -647,7 +647,7 @@ export async function adapterDelete(props: AdapterDeleteProps) {
   const client = service.db.client.directClient;
   const api = service.db.api;
 
-  const result = (await client.mutation(api.adapter.delete, {
+  const result = (await client.mutation(api.adapter.deleteOp, {
     id,
   })) as ConvexDeleteResult;
 
@@ -659,8 +659,8 @@ export async function adapterDelete(props: AdapterDeleteProps) {
  * Named `deleteOp` to avoid conflict with JavaScript's reserved `delete` keyword.
  */
 export const deleteOp = {
-  adapter: adapterDelete,
-  convex: convexDelete,
+  adapter: adapterDeleteOp,
+  convex: convexDeleteOp,
 };
 
 // ============================================================================
@@ -710,19 +710,22 @@ export function convexUpsert(props: ConvexUpsertProps) {
       data: v.any(),
     },
     handler: async (ctx, args) => {
-      let result;
+      let docId: string;
+      let wasUpdate = false;
 
       if (args.id) {
         const existing = await ctx.db.get(args.id as any);
         if (existing) {
-          result = await ctx.db.patch(args.id as any, args.data);
+          await ctx.db.patch(args.id as any, args.data);
+          docId = args.id;
+          wasUpdate = true;
         } else {
           // args.collection is already prefixed by adapter
-          result = await ctx.db.insert(args.collection as any, args.data);
+          docId = await ctx.db.insert(args.collection as any, args.data);
         }
       } else {
         // args.collection is already prefixed by adapter
-        result = await ctx.db.insert(args.collection as any, args.data);
+        docId = await ctx.db.insert(args.collection as any, args.data);
       }
 
       service.system
@@ -731,7 +734,8 @@ export function convexUpsert(props: ConvexUpsertProps) {
             {
               operation: "upsert",
               args: args,
-              result: result,
+              docId: docId,
+              wasUpdate: wasUpdate,
             },
             null,
             2
@@ -739,7 +743,7 @@ export function convexUpsert(props: ConvexUpsertProps) {
         )
         .log();
 
-      return result;
+      return docId;
     },
   });
 }
@@ -1006,9 +1010,8 @@ export function convexDeleteManyWhere(props: ConvexDeleteManyWhereProps) {
 
       const docs = await processor.query().postFilter().collect();
 
-      const result = await Promise.all(
-        docs.map((doc) => ctx.db.delete(doc._id as any))
-      );
+      // Delete all documents - don't capture void results
+      await Promise.all(docs.map((doc) => ctx.db.delete(doc._id as any)));
 
       service.system
         .logger(
@@ -1017,7 +1020,6 @@ export function convexDeleteManyWhere(props: ConvexDeleteManyWhereProps) {
               operation: "deleteManyWhere",
               args: args,
               docsDeleted: docs.length,
-              result: result,
             },
             null,
             2
@@ -1173,9 +1175,10 @@ export function convexIncrement(props: ConvexIncrementProps) {
       // Normalize field name to Convex format (add payvex_ prefix if needed)
       const convexField = normalizeFieldToConvex(args.field);
       const currentValue = (doc as any)[convexField] ?? 0;
+      const newValue = currentValue + args.amount;
 
-      const result = await ctx.db.patch(args.id as any, {
-        [convexField]: currentValue + args.amount,
+      await ctx.db.patch(args.id as any, {
+        [convexField]: newValue,
       });
 
       service.system
@@ -1186,8 +1189,7 @@ export function convexIncrement(props: ConvexIncrementProps) {
               args: args,
               convexField: convexField,
               previousValue: currentValue,
-              newValue: currentValue + args.amount,
-              result: result,
+              newValue: newValue,
             },
             null,
             2
@@ -1195,7 +1197,7 @@ export function convexIncrement(props: ConvexIncrementProps) {
         )
         .log();
 
-      return result;
+      return { newValue };
     },
   });
 }
@@ -1295,12 +1297,15 @@ export function convexTransactional(props: ConvexTransactionalProps) {
     handler: async (ctx, args) => {
       const result = await args.run(ctx);
 
+      // Sanitize undefined to null for Convex compatibility
+      const safeResult = result === undefined ? null : result;
+
       service.system
         .logger(
           JSON.stringify(
             {
               operation: "transactional",
-              result: result,
+              result: safeResult,
             },
             null,
             2
@@ -1308,7 +1313,7 @@ export function convexTransactional(props: ConvexTransactionalProps) {
         )
         .log();
 
-      return result;
+      return safeResult;
     },
   });
 }

@@ -60,6 +60,8 @@ export async function rollbackTransaction(
 ) {
   const { service, incomingID } = props;
 
+  service.system.logger("rollbackTransaction").dir();
+
   const transactionID =
     incomingID instanceof Promise ? await incomingID : incomingID;
   const transactionIdStr = transactionID.toString();

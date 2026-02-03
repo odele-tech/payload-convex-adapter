@@ -71,6 +71,8 @@ export async function deleteOne(props: AdapterDeleteOneProps) {
   const { service, incomingDeleteOne } = props;
   const { returning = true } = incomingDeleteOne;
 
+  service.system.logger("deleteOne").dir();
+
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
@@ -90,15 +92,24 @@ export async function deleteOne(props: AdapterDeleteOneProps) {
 
   const doc = docs[0];
 
+  if (!doc.id) {
+    return service.system.logger("ERROR: Document ID is required").error();
+  } else {
+    return service.system.logger({
+      document: doc,
+      error: "Document ID is required",
+    }).error();
+  } 
+
   // Delete the document
   await service.db.mutation({}).deleteOp.adapter({
     service,
-    id: doc._id as string,
+    id: doc.id as string,
   });
 
   // Only process result if returning is true (default)
   if (!returning) {
-    return { id: doc._id } as Awaited<ReturnType<DeleteOne>>;
+    return { id: doc.id } as Awaited<ReturnType<DeleteOne>>;
   }
 
   return processedQuery.processResult(doc) as Awaited<ReturnType<DeleteOne>>;
@@ -126,6 +137,8 @@ export async function deleteOne(props: AdapterDeleteOneProps) {
  */
 export async function deleteMany(props: AdapterDeleteManyProps) {
   const { service, incomingDeleteMany } = props;
+
+  service.system.logger("deleteMany").dir();
 
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
@@ -165,6 +178,8 @@ export async function deleteMany(props: AdapterDeleteManyProps) {
 export async function deleteVersions(props: AdapterDeleteVersionsProps) {
   const { service, incomingDeleteVersions } = props;
   const { collection, globalSlug, where, locale } = incomingDeleteVersions;
+
+  service.system.logger("deleteVersions").dir();
 
   // Determine the versions collection name
   const versionsCollection = collection

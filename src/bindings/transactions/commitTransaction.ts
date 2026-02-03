@@ -52,9 +52,11 @@ export type ConvexAdapterCommitTransaction = ReturnType<
  * ```
  */
 export async function commitTransaction(
-  props: ConvexAdapterCommitTransactionProps,
+  props: ConvexAdapterCommitTransactionProps
 ) {
   const { service, incomingID } = props;
+
+  service.system.logger("commitTransaction").dir();
 
   const transactionID =
     incomingID instanceof Promise ? await incomingID : incomingID;

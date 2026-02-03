@@ -124,6 +124,8 @@ export async function find(props: AdapterFindProps) {
     skip,
   } = incomingFind;
 
+  service.system.logger("find").dir();
+
   // Use skip if provided (deprecated but still supported)
   const effectivePage =
     skip !== undefined ? Math.floor(skip / limit) + 1 : page;
@@ -203,6 +205,8 @@ export async function find(props: AdapterFindProps) {
 export async function findOne(props: AdapterFindOneProps) {
   const { service, incomingFindOne } = props;
 
+  service.system.logger("findOne").dir();
+
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
@@ -237,6 +241,8 @@ export async function findOne(props: AdapterFindOneProps) {
 export async function findDistinct(props: AdapterFindDistinctProps) {
   const { service, incomingFindDistinct } = props;
   const { field, limit = 10, page = 1 } = incomingFindDistinct;
+
+  service.system.logger("findDistinct").dir();
 
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
@@ -301,6 +307,8 @@ export async function findGlobal(props: AdapterFindGlobalProps) {
   const { service, incomingFindGlobal } = props;
   const { slug } = incomingFindGlobal;
 
+  service.system.logger("findGlobal").dir();
+
   // Globals are stored in a collection named after the slug
   const globalCollection = `_globals_${slug}`;
 
@@ -346,6 +354,8 @@ export async function findVersions(props: AdapterFindVersionsProps) {
     pagination = true,
     skip,
   } = incomingFindVersions;
+
+  service.system.logger("findVersions").dir();
 
   // Use skip if provided (deprecated but still supported)
   const effectivePage =
@@ -440,6 +450,8 @@ export async function findGlobalVersions(
     pagination = true,
     skip,
   } = incomingFindGlobalVersions;
+
+  service.system.logger("findGlobalVersions").dir();
 
   // Use skip if provided (deprecated but still supported)
   const effectivePage =

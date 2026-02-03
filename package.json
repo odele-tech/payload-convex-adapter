@@ -1,6 +1,6 @@
 {
   "name": "payload-convex-adapter",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A database adapter for Payload CMS that uses Convex as the underlying database",
   "author": "Odele Technologies",
   "license": "MIT",
@@ -35,7 +35,8 @@
     }
   },
   "scripts": {
-    "build": "tsup"
+    "build": "tsup",
+    "release": "pnpm build && pnpm publish --access public"
   },
   "keywords": [
     "payload",

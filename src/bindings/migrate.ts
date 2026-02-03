@@ -82,6 +82,8 @@ export type AdapterMigrateStatusProps = {
  * @todo Implement migration execution
  */
 export async function migrate(props: AdapterMigrateProps) {
+  const { service } = props;
+  service.system.logger("migrate").dir();
   // Not implemented
 }
 
@@ -92,7 +94,9 @@ export async function migrate(props: AdapterMigrateProps) {
  * @returns {Promise<void>} Currently not implemented
  * @todo Implement migration rollback
  */
-export async function migrateDown(props: {}) {
+export async function migrateDown(props: { service: AdapterService }) {
+  const { service } = props;
+  service.system.logger("migrateDown").dir();
   // Not implemented
 }
 
@@ -103,7 +107,9 @@ export async function migrateDown(props: {}) {
  * @returns {Promise<void>} Currently not implemented
  * @todo Implement fresh migration
  */
-export async function migrateFresh(props: {}) {
+export async function migrateFresh(props: { service: AdapterService }) {
+  const { service } = props;
+  service.system.logger("migrateFresh").dir();
   // Not implemented
 }
 
@@ -114,7 +120,9 @@ export async function migrateFresh(props: {}) {
  * @returns {Promise<void>} Currently not implemented
  * @todo Implement migration refresh
  */
-export async function migrateRefresh(props: {}) {
+export async function migrateRefresh(props: { service: AdapterService }) {
+  const { service } = props;
+  service.system.logger("migrateRefresh").dir();
   // Not implemented
 }
 
@@ -125,7 +133,9 @@ export async function migrateRefresh(props: {}) {
  * @returns {Promise<void>} Currently not implemented
  * @todo Implement migration reset
  */
-export async function migrateReset(props: {}) {
+export async function migrateReset(props: { service: AdapterService }) {
+  const { service } = props;
+  service.system.logger("migrateReset").dir();
   // Not implemented
 }
 
@@ -136,6 +146,8 @@ export async function migrateReset(props: {}) {
  * @returns {Promise<void>} Currently not implemented
  * @todo Implement migration status reporting
  */
-export async function migrateStatus(props: {}) {
+export async function migrateStatus(props: { service: AdapterService }) {
+  const { service } = props;
+  service.system.logger("migrateStatus").dir();
   // Not implemented
 }

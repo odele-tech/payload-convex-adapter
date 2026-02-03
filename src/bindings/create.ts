@@ -93,6 +93,8 @@ export async function create(props: AdapterCreateProps) {
   const { service, incomingCreate } = props;
   const { collection, data, draft, returning = true } = incomingCreate;
 
+  service.system.logger("create").dir();
+
   // Prepare document data with draft status if applicable
   const documentData = draft ? { ...data, _status: "draft" } : data;
 
@@ -147,6 +149,8 @@ export async function create(props: AdapterCreateProps) {
 export async function createGlobal(props: AdapterCreateGlobalProps) {
   const { service, incomingCreateGlobal } = props;
   const { slug, data, returning = true } = incomingCreateGlobal;
+
+  service.system.logger("createGlobal").dir();
 
   // Globals are stored in a collection named after the slug
   const globalCollection = `_globals_${slug}`;
@@ -217,6 +221,8 @@ export async function createVersion(props: AdapterCreateVersionProps) {
     returning = true,
     snapshot,
   } = incomingCreateVersion;
+
+  service.system.logger("createVersion").dir();
 
   // Versions are stored in a collection with "_versions" suffix
   const versionsCollection = `${collectionSlug}_versions`;
@@ -307,6 +313,8 @@ export async function createGlobalVersion(
     snapshot,
   } = incomingCreateGlobalVersion;
 
+  service.system.logger("createGlobalVersion").dir();
+
   // Global versions are stored in a collection with "_global_versions" suffix
   const globalVersionsCollection = `${globalSlug}_global_versions`;
 
@@ -373,18 +381,7 @@ export async function createGlobalVersion(
 export async function createMigration(props: AdapterCreateMigrationProps) {
   const { service, incomingCreateMigration } = props;
 
-  service.system
-    .logger(
-      JSON.stringify(
-        {
-          binding: "createMigration",
-          params: incomingCreateMigration,
-        },
-        null,
-        2
-      )
-    )
-    .dir();
+  service.system.logger("createMigration").dir();
 
   // Placeholder: Migration creation would typically write to a migrations table
   // For now, we just log the request

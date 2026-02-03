@@ -335,7 +335,6 @@ export function convexAdapter(props: PayloadConvexAdapterProps) {
         migrateFresh: async (migrateFreshProps) => {
           return await service.db.bindings.migrations.migrateFresh({
             service: service,
-            incomingMigrateFresh: migrateFreshProps,
           });
         },
 

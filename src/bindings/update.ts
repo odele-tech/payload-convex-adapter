@@ -175,6 +175,8 @@ export async function updateOne(props: AdapterUpdateOneProps) {
     returning = true,
   } = incomingUpdateOne;
 
+  service.system.logger("updateOne").dir();
+
   let docId: string;
 
   // If ID is provided directly, use it
@@ -277,6 +279,8 @@ export async function updateMany(props: AdapterUpdateManyProps) {
     returning = true,
   } = incomingUpdateMany;
 
+  service.system.logger("updateMany").dir();
+
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
@@ -353,6 +357,8 @@ export async function updateMany(props: AdapterUpdateManyProps) {
 export async function updateGlobal(props: AdapterUpdateGlobalProps) {
   const { service, incomingUpdateGlobal } = props;
   const { slug, data, returning = true } = incomingUpdateGlobal;
+
+  service.system.logger("updateGlobal").dir();
 
   // Globals are stored in a collection named after the slug
   const globalCollection = `_globals_${slug}`;
@@ -436,6 +442,8 @@ export async function updateVersion(props: AdapterUpdateVersionProps) {
     where,
     returning = true,
   } = incomingUpdateVersion;
+
+  service.system.logger("updateVersion").dir();
 
   // Versions are stored in a collection with "_versions" suffix
   const versionsCollection = `${collection}_versions`;
@@ -535,6 +543,8 @@ export async function updateGlobalVersion(
     returning = true,
   } = incomingUpdateGlobalVersion;
 
+  service.system.logger("updateGlobalVersion").dir();
+
   // Global versions are stored in a collection with "_global_versions" suffix
   const globalVersionsCollection = `${global}_global_versions`;
 
@@ -626,6 +636,8 @@ export async function updateGlobalVersion(
 export async function updateJobs(props: AdapterUpdateJobsProps) {
   const { service, incomingUpdateJobs } = props;
   const { data, id, where, limit, returning = true } = incomingUpdateJobs;
+
+  service.system.logger("updateJobs").dir();
 
   const jobsCollection = "_jobs";
 

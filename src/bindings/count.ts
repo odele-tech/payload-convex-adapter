@@ -52,6 +52,8 @@ export type AdapaterCountGlobalVersionsProps = {
 export async function count(props: AdapaterCountProps) {
   const { service, incomingCount } = props;
 
+  service.system.logger("count").dir();
+
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
@@ -80,6 +82,8 @@ export async function count(props: AdapaterCountProps) {
 export async function countVersions(props: AdapaterCountVersionsProps) {
   const { service, incomingCountVersions } = props;
   const { collection } = incomingCountVersions;
+
+  service.system.logger("countVersions").dir();
 
   // Versions are stored in a collection with "_versions" suffix
   const versionsCollection = `${collection}_versions`;
@@ -115,6 +119,8 @@ export async function countGlobalVersions(
 ) {
   const { service, incomingCountGlobalVersions } = props;
   const { global } = incomingCountGlobalVersions;
+
+  service.system.logger("countGlobalVersions").dir();
 
   // Global versions are stored in a collection with "_global_versions" suffix
   const globalVersionsCollection = `${global}_global_versions`;
