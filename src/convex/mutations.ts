@@ -1025,7 +1025,7 @@ export function convexDeleteManyWhere(props: ConvexDeleteManyWhereProps) {
         )
         .log();
 
-      return result;
+      return docs.length;
     },
   });
 }
