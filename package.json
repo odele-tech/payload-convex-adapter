@@ -2,6 +2,23 @@
   "name": "payload-convex-adapter",
   "version": "1.0.0",
   "description": "A database adapter for Payload CMS that uses Convex as the underlying database",
+  "author": "Odele Technologies",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/odele-tech/payload-convex-adapter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/odele-tech/payload-convex-adapter/issues"
+  },
+  "homepage": "https://github.com/odele-tech/payload-convex-adapter#readme",
+  "files": [
+    "dist",
+    "LICENSE.md",
+    "README.md"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "type": "module",
   "exports": {
     ".": {
