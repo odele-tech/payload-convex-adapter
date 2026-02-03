@@ -20,6 +20,7 @@ export * from "./is-dev";
 export * from "./parse-collection";
 export * from "./query-processor";
 export * from "./random";
+export * from "./sanitizer";
 export * from "./scripts";
 export * from "./session-tracker";
 export * from "./logger";
