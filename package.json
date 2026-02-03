@@ -1,0 +1,40 @@
+{
+  "name": "payload-convex-adapter",
+  "version": "1.0.0",
+  "description": "A database adapter for Payload CMS that uses Convex as the underlying database",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./convex": {
+      "types": "./dist/convex/index.d.ts",
+      "default": "./dist/convex/index.js"
+    },
+    "./safe-service": {
+      "types": "./dist/adapter/safe-service.d.ts",
+      "default": "./dist/adapter/safe-service.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup"
+  },
+  "keywords": [
+    "payload",
+    "convex",
+    "adapter",
+    "database",
+    "cms"
+  ],
+  "dependencies": {
+    "@payloadcms/db-postgres": "3.73.0",
+    "convex": "^1.31.6",
+    "payload": "^3.73.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@odeletech/specs": "workspace:*",
+    "tsup": "^8.5.1"
+  }
+}
