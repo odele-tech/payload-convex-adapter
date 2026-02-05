@@ -465,29 +465,69 @@ function buildNode(
 
 /**
  * Normalizes a single field segment to Convex format.
+ *
+ * Rules:
+ * 1. Special Payload fields (id, createdAt) → Convex system fields
+ * 2. Convex system fields → preserved
+ * 3. Payload system fields (_ or $) → prefixed with pca_
+ * 4. Regular user fields (including updatedAt) → unchanged
+ *
+ * Examples:
+ * - "id" → "_id"
+ * - "createdAt" → "_creationTime"
+ * - "updatedAt" → "updatedAt" (user field, NOT mutated)
+ * - "_status" → "pca__status"
+ * - "$inc" → "pca_$inc"
+ * - "title" → "title"
+ *
  * @internal
  */
 function normalizeFieldSegment(segment: string): string {
+  // Special Payload → Convex mappings (id and createdAt only)
   if (segment === "id") return "_id";
-  if (segment === "_id") return "_id";
   if (segment === "createdAt") return "_creationTime";
-  if (segment === "_creationTime") return "_creationTime";
-  if (segment === "updatedAt") return "_updatedTime";
-  if (segment === "_updatedTime") return "_updatedTime";
-  return `payvex_${segment}`;
+
+  // Convex system fields - preserve as-is
+  if (
+    segment === "_id" ||
+    segment === "_creationTime" ||
+    segment === "_updatedTime"
+  ) {
+    return segment;
+  }
+
+  // Payload system fields starting with _ or $ need prefixing
+  if (segment.startsWith("_") || segment.startsWith("$")) {
+    return `pca_${segment}`;
+  }
+
+  // Regular user fields unchanged (including updatedAt)
+  return segment;
 }
 
 /**
  * Normalizes Payload field names to Convex field names.
+ * Applies normalization to EACH segment of nested paths.
+ *
+ * Examples:
+ * - "id" → "_id"
+ * - "createdAt" → "_creationTime"
+ * - "updatedAt" → "updatedAt" (NOT mutated)
+ * - "title" → "title"
+ * - "_status" → "pca__status"
+ * - "$inc" → "pca_$inc"
+ * - "author.name" → "author.name"
+ * - "author._custom" → "author.pca__custom"
+ * - "meta.$special" → "meta.pca_$special"
+ *
  * @internal
  */
 function normalizeField(field: string): string {
-  // Handle nested field paths - prefix each segment
+  // Handle nested field paths - normalize each segment
   if (field.includes(".")) {
     return field.split(".").map(normalizeFieldSegment).join(".");
   }
 
-  // Single field - normalize directly
   return normalizeFieldSegment(field);
 }
 
@@ -716,31 +756,76 @@ export type ValueTransformer = (value: any, key: string) => any;
 
 /**
  * Default key transformer for Payload to Convex.
- * Prefixes all keys with `payvex_` to avoid conflicts with Convex reserved fields.
+ *
+ * Transformation rules:
+ * 1. Payload special fields (id, createdAt) → Convex system fields
+ * 2. Payload system fields starting with _ or $ → prefixed with pca_
+ * 3. Regular user fields (including updatedAt) → unchanged
+ *
+ * Examples:
+ * - "id" → "_id" (Payload → Convex system field)
+ * - "createdAt" → "_creationTime"
+ * - "updatedAt" → "updatedAt" (user field, NOT mutated)
+ * - "_status" → "pca__status" (Payload system field)
+ * - "_custom" → "pca__custom" (Payload system field)
+ * - "$inc" → "pca_$inc" (Payload operator field)
+ * - "title" → "title" (user field, unchanged)
+ * - "author" → "author" (user field, unchanged)
  */
 const defaultKeyToConvex: KeyTransformer = (key: string): string => {
-  // Skip Convex system fields that should not be prefixed
-  if (key === "_id" || key === "_creationTime") {
+  // Special Payload fields that map to Convex system fields
+  if (key === "id") return "_id";
+  if (key === "createdAt") return "_creationTime";
+
+  // Convex system fields (already in Convex format) - preserve as-is
+  if (key === "_id" || key === "_creationTime" || key === "_updatedTime") {
     return key;
   }
-  // Prefix all other keys with payvex_
-  return `payvex_${key}`;
+
+  // Payload system fields starting with _ or $ need prefixing
+  if (key.startsWith("_") || key.startsWith("$")) {
+    return `pca_${key}`;
+  }
+
+  // Regular user fields pass through unchanged (including updatedAt)
+  return key;
 };
 
 /**
  * Default key transformer for Convex to Payload.
- * Transforms Convex system fields to Payload format and removes the `payvex_` prefix.
+ *
+ * Transformation rules:
+ * 1. Convex system time field → Payload conventions (createdAt only)
+ * 2. Prefixed Payload system fields (pca__status) → unprefixed (_status)
+ * 3. _id preserved (will add .id separately in transformObjectToPayload)
+ * 4. Regular user fields (including updatedAt) → unchanged
+ *
+ * Examples:
+ * - "_creationTime" → "createdAt"
+ * - "_updatedTime" → "_updatedTime" (preserved, NOT mutated)
+ * - "_id" → "_id" (preserved, .id added later)
+ * - "updatedAt" → "updatedAt" (user field, unchanged)
+ * - "pca__status" → "_status"
+ * - "pca__custom" → "_custom"
+ * - "pca_$inc" → "$inc"
+ * - "title" → "title" (user field, unchanged)
  */
 const defaultKeyToPayload: KeyTransformer = (key: string): string => {
-  // Transform Convex system fields to Payload format
-  if (key === "_id") return "id";
+  // Transform Convex system time field to Payload conventions (createdAt only)
   if (key === "_creationTime") return "createdAt";
-  if (key === "_updatedTime") return "updatedAt";
 
-  // Remove payvex_ prefix if present
-  if (key.startsWith("payvex_")) {
-    return key.replace("payvex_", "");
+  // Preserve _id (we'll add .id separately in transformObjectToPayload)
+  if (key === "_id") return "_id";
+
+  // Preserve _updatedTime as system field (not transformed to updatedAt)
+  if (key === "_updatedTime") return "_updatedTime";
+
+  // Remove pca_ prefix from Payload system fields
+  if (key.startsWith("pca_")) {
+    return key.replace("pca_", "");
   }
+
+  // All other fields pass through unchanged
   return key;
 };
 
@@ -751,6 +836,13 @@ const defaultValueTransformer: ValueTransformer = (value: any) => value;
 
 /**
  * Recursively transforms a value from Payload to Convex format.
+ *
+ * Processes:
+ * - Date objects → Unix timestamps
+ * - ISO date strings → Unix timestamps
+ * - Arrays/objects recursively for dates
+ *
+ * Does NOT transform field names (only done at top level).
  */
 function transformValueToConvex(value: any, key: string = ""): any {
   // Handle null/undefined
@@ -758,24 +850,33 @@ function transformValueToConvex(value: any, key: string = ""): any {
     return value;
   }
 
-  // Handle Date objects - convert to Unix timestamp (number)
+  // Handle Date objects - convert to Unix timestamp
   if (value instanceof Date) {
     return value.getTime();
   }
 
-  // Handle arrays - recursively transform elements
+  // Handle arrays - recursively transform elements for dates
   if (Array.isArray(value)) {
     return value
       .filter((item) => item !== undefined)
       .map((item, index) => transformValueToConvex(item, `${key}[${index}]`));
   }
 
-  // Handle nested objects - recursively transform
+  // Handle nested objects - recursively process for dates
+  // Keys remain unchanged in nested objects (no pca_ prefix applied)
   if (typeof value === "object") {
-    return transformObjectToConvex(value);
+    const result: any = {};
+    for (const [nestedKey, nestedValue] of Object.entries(value)) {
+      // Keep original key name - no transformation for nested keys
+      result[nestedKey] = transformValueToConvex(
+        nestedValue,
+        `${key}.${nestedKey}`
+      );
+    }
+    return result;
   }
 
-  // Handle ISO date strings - convert to Unix timestamp (number)
+  // Handle ISO date strings - convert to Unix timestamp
   if (
     typeof value === "string" &&
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)
@@ -786,18 +887,31 @@ function transformValueToConvex(value: any, key: string = ""): any {
     }
   }
 
+  // All other primitives pass through unchanged
   return value;
 }
 
 /**
  * Transforms an object from Payload to Convex format.
+ *
+ * - Transforms top-level keys using defaultKeyToConvex
+ * - Processes values for date conversion
+ * - Nested object keys remain unchanged (no pca_ prefix)
+ *
+ * Example:
+ * Input:  { _status: "draft", title: "Hello", meta: { _custom: "val" } }
+ * Output: { pca__status: "draft", title: "Hello", meta: { _custom: "val" } }
  */
 function transformObjectToConvex(obj: PayloadData): ConvexData {
   const result: ConvexData = {};
 
   for (const [originalKey, value] of Object.entries(obj)) {
+    // Transform top-level key only (applies pca_ prefix to _ and $ fields)
     const transformedKey = defaultKeyToConvex(originalKey);
+
+    // Transform value (dates only, nested keys unchanged)
     const transformedValue = transformValueToConvex(value, transformedKey);
+
     result[transformedKey] = transformedValue;
   }
 
@@ -806,6 +920,12 @@ function transformObjectToConvex(obj: PayloadData): ConvexData {
 
 /**
  * Recursively transforms a value from Convex to Payload format.
+ *
+ * Processes:
+ * - Timestamps → ISO date strings (for date-like fields)
+ * - Arrays/objects recursively for dates
+ *
+ * Does NOT transform field names (only done at top level).
  */
 function transformValueToPayload(value: any, key: string = ""): any {
   // Handle null/undefined
@@ -813,48 +933,80 @@ function transformValueToPayload(value: any, key: string = ""): any {
     return value;
   }
 
-  // Handle timestamps - convert back to ISO strings for user date fields
+  // Handle timestamps - convert to ISO strings for date-like fields
   if (
     typeof value === "number" &&
-    key !== "_creationTime" && // Don't convert Convex system field
-    key !== "_id" && // Don't convert IDs
+    key !== "_creationTime" &&
+    key !== "_updatedTime" &&
+    key !== "_id" &&
+    key !== "id" &&
+    // Detect date-like field names
     (key.toLowerCase().includes("at") ||
       key.toLowerCase().includes("date") ||
       key.toLowerCase().includes("time"))
   ) {
     // Check if it's a reasonable timestamp (between year 2000 and 2100)
-    const year2000 = 946684800000; // Jan 1, 2000
-    const year2100 = 4102444800000; // Jan 1, 2100
+    const year2000 = 946684800000;
+    const year2100 = 4102444800000;
     if (value >= year2000 && value <= year2100) {
       return new Date(value).toISOString();
     }
   }
 
-  // Handle arrays - recursively transform elements
+  // Handle arrays - recursively process for dates
   if (Array.isArray(value)) {
     return value.map((item, index) =>
       transformValueToPayload(item, `${key}[${index}]`)
     );
   }
 
-  // Handle nested objects - recursively transform
+  // Handle nested objects - recursively process for dates
+  // Keys remain unchanged in nested objects
   if (typeof value === "object" && !(value instanceof Date)) {
-    return transformObjectToPayload(value);
+    const result: any = {};
+    for (const [nestedKey, nestedValue] of Object.entries(value)) {
+      // Keep original key name - no transformation for nested keys
+      result[nestedKey] = transformValueToPayload(
+        nestedValue,
+        `${key}.${nestedKey}`
+      );
+    }
+    return result;
   }
 
+  // All other primitives pass through unchanged
   return value;
 }
 
 /**
  * Transforms an object from Convex to Payload format.
+ *
+ * - Transforms top-level keys using defaultKeyToPayload
+ * - Removes pca_ prefix from Payload system fields
+ * - Adds .id field from _id for Payload compatibility
+ * - Processes values for date conversion
+ * - Nested object keys remain unchanged
+ *
+ * Example:
+ * Input:  { _id: "123", pca__status: "draft", title: "Hello" }
+ * Output: { _id: "123", id: "123", _status: "draft", title: "Hello" }
  */
 function transformObjectToPayload(obj: ConvexData): PayloadData {
   const result: PayloadData = {};
 
   for (const [originalKey, value] of Object.entries(obj)) {
+    // Transform top-level key (removes pca_ prefix, transforms time fields)
     const transformedKey = defaultKeyToPayload(originalKey);
+
+    // Transform value (dates only, nested keys unchanged)
     const transformedValue = transformValueToPayload(value, transformedKey);
+
     result[transformedKey] = transformedValue;
+  }
+
+  // Special handling: Add .id field from _id for Payload compatibility
+  if (result._id !== undefined && result._id !== null) {
+    result.id = result._id;
   }
 
   return result;
@@ -1063,7 +1215,7 @@ export type ProcessedConvexQueryProps = {
   collection: string;
   /** Parsed where filter with hybrid filtering support */
   wherePlan: EnhancedParsedWhereFilter;
-  /** Compiled data safe for Convex (with payvex_ prefix, dates as timestamps) */
+  /** Compiled data safe for Convex (with pca_ prefix for Payload system fields, dates as timestamps) */
   data?: Record<string, unknown>;
   /** Limit for query results */
   limit?: number;
@@ -1251,7 +1403,7 @@ function createAdapterQueryProcessor(
   // 2. Process where clause into WherePlan (use pre-parsed if provided)
   const wherePlan = inputWherePlan || parsePayloadWhere(where);
 
-  // 3. Transform data to Convex-safe format (apply payvex_ prefix, convert dates)
+  // 3. Transform data to Convex-safe format (apply pca_ prefix for Payload system fields, convert dates)
   const compiledData = data ? compileToConvex(data) : undefined;
 
   // 4. Process sort into order (use direct order if provided)

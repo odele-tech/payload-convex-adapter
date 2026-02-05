@@ -392,6 +392,16 @@ export async function adapterPatch<T>(props: AdapterPatchProps<T>) {
   });
   const compiledData = processor.convexQueryProps.data!;
 
+  // Filter out read-only Convex system fields that cannot be patched
+  const patchableData: Record<string, any> = {};
+  for (const [key, value] of Object.entries(compiledData)) {
+    // Skip Convex system fields (_id, _creationTime) - they are read-only
+    if (key === "_id" || key === "_creationTime") {
+      continue;
+    }
+    patchableData[key] = value;
+  }
+
   if (service.system.isDev) {
     service.system
       .logger(
@@ -401,6 +411,7 @@ export async function adapterPatch<T>(props: AdapterPatchProps<T>) {
             id: id,
             data: data,
             compiledData: compiledData,
+            patchableData: patchableData,
           },
           null,
           2
@@ -414,7 +425,7 @@ export async function adapterPatch<T>(props: AdapterPatchProps<T>) {
 
   const result = (await client.mutation(api.adapter.patch, {
     id,
-    data: compiledData,
+    data: patchableData,
   })) as ConvexPatchResult;
 
   return result;
@@ -1119,26 +1130,68 @@ export type ConvexIncrementResult = ExtractConvexMutationResult<
 
 /**
  * Normalizes a Payload field name to Convex format.
- * System fields (id, createdAt, updatedAt) are mapped to Convex equivalents.
- * Other fields are prefixed with payvex_.
+ *
+ * Rules:
+ * 1. Special Payload fields (id, createdAt) → Convex system fields
+ * 2. Convex system fields → preserved
+ * 3. Payload system fields (_ or $) → prefixed with pca_
+ * 4. Regular user fields (including updatedAt) → unchanged
+ * 5. Handles nested paths correctly
+ *
+ * Examples:
+ * - "id" → "_id"
+ * - "createdAt" → "_creationTime"
+ * - "updatedAt" → "updatedAt" (NOT mutated)
+ * - "_status" → "pca__status"
+ * - "$inc" → "pca_$inc"
+ * - "title" → "title"
+ * - "author._custom" → "author.pca__custom"
+ *
  * @internal
  */
 function normalizeFieldToConvex(field: string): string {
-  if (field === "id") return "_id";
-  if (field === "_id") return "_id";
-  if (field === "createdAt") return "_creationTime";
-  if (field === "_creationTime") return "_creationTime";
-  if (field === "updatedAt") return "_updatedTime";
-  if (field === "_updatedTime") return "_updatedTime";
-  if (field.startsWith("payvex_")) return field;
-  return `payvex_${field}`;
+  // Helper function for single segment
+  const normalizeSegment = (segment: string): string => {
+    // Special Payload → Convex mappings (id and createdAt only)
+    if (segment === "id") return "_id";
+    if (segment === "createdAt") return "_creationTime";
+
+    // Convex system fields - preserve
+    if (
+      segment === "_id" ||
+      segment === "_creationTime" ||
+      segment === "_updatedTime"
+    ) {
+      return segment;
+    }
+
+    // Already prefixed - preserve
+    if (segment.startsWith("pca_")) {
+      return segment;
+    }
+
+    // Payload system fields (_ or $) need prefixing
+    if (segment.startsWith("_") || segment.startsWith("$")) {
+      return `pca_${segment}`;
+    }
+
+    // Regular user fields unchanged (including updatedAt)
+    return segment;
+  };
+
+  // Handle nested paths
+  if (field.includes(".")) {
+    return field.split(".").map(normalizeSegment).join(".");
+  }
+
+  return normalizeSegment(field);
 }
 
 /**
  * @function convexIncrement
  * Creates a Convex mutation function to atomically increment a numeric field.
  * This is useful for counters, scores, and other numeric values that need atomic updates.
- * Handles field name normalization (adds payvex_ prefix for user fields).
+ * Handles field name normalization (adds pca_ prefix for Payload system fields starting with _ or $).
  *
  * @param {ConvexIncrementProps} props - The function configuration
  * @param {AdapterService} props.service - The adapter service instance
@@ -1172,7 +1225,7 @@ export function convexIncrement(props: ConvexIncrementProps) {
         return null;
       }
 
-      // Normalize field name to Convex format (add payvex_ prefix if needed)
+      // Normalize field name to Convex format (add pca_ prefix for _ or $ fields)
       const convexField = normalizeFieldToConvex(args.field);
       const currentValue = (doc as any)[convexField] ?? 0;
       const newValue = currentValue + args.amount;

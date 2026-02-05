@@ -92,15 +92,6 @@ export async function deleteOne(props: AdapterDeleteOneProps) {
 
   const doc = docs[0];
 
-  if (!doc.id) {
-    return service.system.logger("ERROR: Document ID is required").error();
-  } else {
-    return service.system.logger({
-      document: doc,
-      error: "Document ID is required",
-    }).error();
-  } 
-
   // Delete the document
   await service.db.mutation({}).deleteOp.adapter({
     service,
@@ -112,7 +103,7 @@ export async function deleteOne(props: AdapterDeleteOneProps) {
     return { id: doc.id } as Awaited<ReturnType<DeleteOne>>;
   }
 
-  return processedQuery.processResult(doc) as Awaited<ReturnType<DeleteOne>>;
+  return doc as Awaited<ReturnType<DeleteOne>>;
 }
 
 /**

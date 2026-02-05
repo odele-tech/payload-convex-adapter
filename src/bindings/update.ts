@@ -42,6 +42,18 @@ function splitIncrementOps(data: Record<string, unknown> | null | undefined) {
   }
 
   for (const [field, value] of Object.entries(data)) {
+    // Skip read-only system fields that cannot be updated
+    // createdAt -> _creationTime (Convex read-only system field)
+    // id -> _id (Convex read-only system field)
+    if (
+      field === "createdAt" ||
+      field === "id" ||
+      field === "_id" ||
+      field === "_creationTime"
+    ) {
+      continue;
+    }
+
     if (isRecord(value) && "$inc" in value) {
       const amount = (value as Record<string, unknown>)["$inc"];
       if (typeof amount !== "number") {
