@@ -16,6 +16,10 @@
 
 import type { AdapterService } from "../adapter/service";
 import { DeleteOne, DeleteMany, DeleteVersions } from "payload";
+import {
+  convertLteToLtForUpdatedAt,
+  addVersionIdExclusion,
+} from "../tools/query-processor";
 
 /**
  * Props for the deleteOne operation.
@@ -150,7 +154,19 @@ export async function deleteMany(props: AdapterDeleteManyProps) {
  *
  * Versions are stored in collections named `{collection}_versions` or `{global}_versions`.
  * This function deletes version documents matching the provided where clause.
- * Returns void per Payload's specification.
+ *
+ * ## Version Deletion Safeguards
+ *
+ * To prevent newly created versions from being immediately deleted, this function applies
+ * two safeguards that mirror the MongoDB adapter's behavior:
+ *
+ * 1. **Timestamp Conversion**: Converts `less_than_equal` to `less_than` for `updatedAt`
+ *    comparisons. This prevents deletion of versions with exactly matching timestamps.
+ *
+ * 2. **ID Exclusion**: Excludes the recently created version ID (if tracked in service context)
+ *    from the deletion query.
+ *
+ * These safeguards ensure that the version created immediately before cleanup is preserved.
  *
  * @param {AdapterDeleteVersionsProps} props - The deleteVersions operation parameters
  * @returns {Promise<Awaited<ReturnType<DeleteVersions>>>} void
@@ -161,9 +177,10 @@ export async function deleteMany(props: AdapterDeleteManyProps) {
  *   service,
  *   incomingDeleteVersions: {
  *     collection: 'posts',
- *     where: { parent: { equals: '123' } },
+ *     where: { parent: { equals: '123' }, updatedAt: { less_than_equal: timestamp } },
  *   },
  * });
+ * // Automatically converts to less_than and excludes recent version ID
  * ```
  */
 export async function deleteVersions(props: AdapterDeleteVersionsProps) {
@@ -177,7 +194,7 @@ export async function deleteVersions(props: AdapterDeleteVersionsProps) {
     ? `${collection}_versions`
     : `${globalSlug}_versions`;
 
-  // Pass compatible params to queryProcessor (sort is excluded as it has incompatible type)
+  // Process the where clause into a WherePlan
   const processedQuery = service.tools.queryProcessor({
     service,
     collection: versionsCollection,
@@ -186,9 +203,25 @@ export async function deleteVersions(props: AdapterDeleteVersionsProps) {
     convex: false,
   });
 
-  // Delete all matching version documents
+  // SAFEGUARD 1: Convert less_than_equal to less_than for updatedAt comparisons
+  // This prevents deletion of versions with exactly matching timestamps
+  let safeguardedWherePlan = convertLteToLtForUpdatedAt(
+    processedQuery.convexQueryProps.wherePlan
+  );
+
+  // SAFEGUARD 2: Exclude the recently created version ID if it exists
+  const recentVersionId = service.system.getRecentVersionId();
+  if (recentVersionId) {
+    safeguardedWherePlan = addVersionIdExclusion(
+      safeguardedWherePlan,
+      recentVersionId
+    );
+  }
+
+  // Delete with safeguarded filter
   await service.db.mutation({}).deleteManyWhere.adapter({
     service,
     ...processedQuery.convexQueryProps,
+    wherePlan: safeguardedWherePlan,
   });
 }

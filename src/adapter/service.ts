@@ -99,12 +99,33 @@ export function createAdapterService<T extends GenericDataModel>(
   const serviceLogger = createServiceLogger({ prefix });
   const sessionTracker = createSessionTracker();
 
+  // Version tracking context for coordinating version creation and cleanup
+  let recentVersionId: string | undefined;
+
   const system = {
     url: convexUrl,
     prefix: prefix,
     logger: serviceLogger,
     isDev,
     isClient,
+    /**
+     * Sets the ID of a recently created version to protect it from cleanup.
+     * This is used to coordinate between createVersion and deleteVersions operations.
+     */
+    setRecentVersionId: (id: string) => {
+      recentVersionId = id;
+    },
+    /**
+     * Gets the ID of the recently created version, if any.
+     * Returns undefined if no version was recently created.
+     */
+    getRecentVersionId: () => recentVersionId,
+    /**
+     * Clears the recent version ID after cleanup is complete.
+     */
+    clearRecentVersionId: () => {
+      recentVersionId = undefined;
+    },
   };
 
   const db = {

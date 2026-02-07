@@ -207,6 +207,191 @@ function splitWhereNode(node: WhereNode): {
 }
 
 /**
+ * Transforms field names in a WhereComparison from Payload to Convex format.
+ * @internal
+ */
+function transformComparisonFieldsToConvex(
+  comparison: WhereComparison
+): WhereComparison {
+  return {
+    ...comparison,
+    field: normalizeField(comparison.field),
+  };
+}
+
+/**
+ * Transforms field names in a WhereNode from Payload to Convex format.
+ * Recursively processes all nodes in the tree.
+ * @internal
+ */
+function transformWhereNodeToConvex(node: WhereNode): WhereNode {
+  switch (node.type) {
+    case "comparison":
+      return {
+        type: "comparison",
+        comparison: transformComparisonFieldsToConvex(node.comparison),
+      };
+
+    case "and":
+      return {
+        type: "and",
+        nodes: node.nodes.map(transformWhereNodeToConvex),
+      };
+
+    case "or":
+      return {
+        type: "or",
+        nodes: node.nodes.map(transformWhereNodeToConvex),
+      };
+
+    case "not":
+      return {
+        type: "not",
+        node: transformWhereNodeToConvex(node.node),
+      };
+  }
+}
+
+/**
+ * Transforms field names in an EnhancedParsedWhereFilter from Payload to Convex format.
+ * Applies transformation to both dbFilter and postFilter.
+ * @internal
+ */
+function transformWherePlanToConvex(
+  plan: EnhancedParsedWhereFilter
+): EnhancedParsedWhereFilter {
+  return {
+    strategy: plan.strategy,
+    dbFilter: plan.dbFilter ? transformWhereNodeToConvex(plan.dbFilter) : null,
+    postFilter: plan.postFilter
+      ? transformWhereNodeToConvex(plan.postFilter)
+      : null,
+  };
+}
+
+/**
+ * Converts less_than_equal to less_than for a specific field in a WhereNode.
+ * This is used to prevent deletion of versions with exactly matching timestamps.
+ *
+ * @param node - The WhereNode to transform
+ * @param fieldName - The field name to convert (e.g., "updatedAt")
+ * @returns Transformed WhereNode with less_than instead of less_than_equal
+ * @internal
+ */
+function convertNodeLteToLt(node: WhereNode, fieldName: string): WhereNode {
+  switch (node.type) {
+    case "comparison":
+      if (
+        node.comparison.field === fieldName &&
+        node.comparison.operator === "less_than_equal"
+      ) {
+        return {
+          type: "comparison",
+          comparison: {
+            ...node.comparison,
+            operator: "less_than",
+          },
+        };
+      }
+      return node;
+
+    case "and":
+      return {
+        type: "and",
+        nodes: node.nodes.map((n) => convertNodeLteToLt(n, fieldName)),
+      };
+
+    case "or":
+      return {
+        type: "or",
+        nodes: node.nodes.map((n) => convertNodeLteToLt(n, fieldName)),
+      };
+
+    case "not":
+      return {
+        type: "not",
+        node: convertNodeLteToLt(node.node, fieldName),
+      };
+
+    default:
+      return node;
+  }
+}
+
+/**
+ * Converts less_than_equal to less_than for updatedAt comparisons in a WherePlan.
+ * This prevents deletion of versions with exactly matching timestamps, which is
+ * critical for protecting newly created versions from immediate cleanup.
+ *
+ * Mirrors the MongoDB adapter's behavior which uses strictly less-than comparisons
+ * to avoid deleting the version that was just created.
+ *
+ * @param wherePlan - The WherePlan to safeguard
+ * @returns Safeguarded WherePlan with less_than instead of less_than_equal for updatedAt
+ *
+ * @example
+ * ```typescript
+ * const safeguarded = convertLteToLtForUpdatedAt(wherePlan);
+ * // updatedAt <= X becomes updatedAt < X
+ * ```
+ */
+export function convertLteToLtForUpdatedAt(
+  wherePlan: EnhancedParsedWhereFilter
+): EnhancedParsedWhereFilter {
+  return {
+    strategy: wherePlan.strategy,
+    dbFilter: wherePlan.dbFilter
+      ? convertNodeLteToLt(wherePlan.dbFilter, "updatedAt")
+      : null,
+    postFilter: wherePlan.postFilter
+      ? convertNodeLteToLt(wherePlan.postFilter, "updatedAt")
+      : null,
+  };
+}
+
+/**
+ * Adds an exclusion filter for a specific document ID to a WherePlan.
+ * This is used to protect a specific version from being deleted during cleanup.
+ *
+ * The exclusion is added as an AND condition to the existing filters, ensuring
+ * the specified ID is never matched by the query.
+ *
+ * @param wherePlan - The WherePlan to add exclusion to
+ * @param excludeId - The document ID to exclude from results
+ * @returns WherePlan with ID exclusion added
+ *
+ * @example
+ * ```typescript
+ * const protected = addVersionIdExclusion(wherePlan, newVersionId);
+ * // Ensures the newly created version is not deleted
+ * ```
+ */
+export function addVersionIdExclusion(
+  wherePlan: EnhancedParsedWhereFilter,
+  excludeId: string
+): EnhancedParsedWhereFilter {
+  const exclusionNode: WhereNode = {
+    type: "comparison",
+    comparison: {
+      field: "_id",
+      operator: "not_equals",
+      value: excludeId,
+    },
+  };
+
+  // Add to dbFilter if it exists
+  const newDbFilter = wherePlan.dbFilter
+    ? { type: "and" as const, nodes: [wherePlan.dbFilter, exclusionNode] }
+    : exclusionNode;
+
+  return {
+    strategy: wherePlan.strategy === "post" ? "hybrid" : wherePlan.strategy,
+    dbFilter: newDbFilter,
+    postFilter: wherePlan.postFilter,
+  };
+}
+
+/**
  * Parses a Payload Where object into an enhanced filter with hybrid filtering support.
  *
  * This function runs on the client/adapter side and converts Payload's
@@ -275,6 +460,7 @@ export type CreateWherePlanProps = {
  * - Splitting filters into DB-compatible and post-processing phases
  * - Date conversion (ISO strings to timestamps)
  * - Nested field path detection for hybrid filtering
+ * - Field name transformation (Payload → Convex format)
  *
  * @param {CreateWherePlanProps} props - The function parameters
  * @returns {WherePlan} The parsed where plan ready for Convex operations
@@ -300,7 +486,9 @@ export type CreateWherePlanProps = {
  */
 export function createWherePlan(props: CreateWherePlanProps): WherePlan {
   const { where } = props;
-  return parsePayloadWhere(where ?? undefined);
+  const rawWherePlan = parsePayloadWhere(where ?? undefined);
+  // Transform field names from Payload to Convex format
+  return transformWherePlanToConvex(rawWherePlan);
 }
 
 /**
@@ -507,7 +695,9 @@ function normalizeFieldSegment(segment: string): string {
 
 /**
  * Normalizes Payload field names to Convex field names.
- * Applies normalization to EACH segment of nested paths.
+ *
+ * IMPORTANT: Nested paths are preserved as-is to avoid mutating nested data keys.
+ * Only top-level fields are normalized.
  *
  * Examples:
  * - "id" → "_id"
@@ -516,16 +706,16 @@ function normalizeFieldSegment(segment: string): string {
  * - "title" → "title"
  * - "_status" → "pca__status"
  * - "$inc" → "pca_$inc"
- * - "author.name" → "author.name"
- * - "author._custom" → "author.pca__custom"
- * - "meta.$special" → "meta.pca_$special"
+ * - "author.name" → "author.name" (nested path preserved)
+ * - "author._custom" → "author._custom" (nested path preserved)
+ * - "meta.$special" → "meta.$special" (nested path preserved)
  *
  * @internal
  */
 function normalizeField(field: string): string {
-  // Handle nested field paths - normalize each segment
+  // Preserve nested field paths to avoid mutating nested keys
   if (field.includes(".")) {
-    return field.split(".").map(normalizeFieldSegment).join(".");
+    return field;
   }
 
   return normalizeFieldSegment(field);
@@ -602,9 +792,10 @@ function buildComparison(
 function getNestedValue(obj: any, path: string): any {
   const parts = path.split(".");
   let current = obj;
+  const normalize = parts.length === 1;
   for (const part of parts) {
     if (current === null || current === undefined) return undefined;
-    const key = normalizeFieldSegment(part);
+    const key = normalize ? normalizeFieldSegment(part) : part;
     current = current[key];
   }
   return current;
@@ -1401,17 +1592,21 @@ function createAdapterQueryProcessor(
   });
 
   // 2. Process where clause into WherePlan (use pre-parsed if provided)
-  const wherePlan = inputWherePlan || parsePayloadWhere(where);
+  const rawWherePlan = inputWherePlan || parsePayloadWhere(where);
 
-  // 3. Transform data to Convex-safe format (apply pca_ prefix for Payload system fields, convert dates)
+  // 3. Transform field names in wherePlan from Payload to Convex format
+  // This ensures field names like _status become pca__status to match stored data
+  const wherePlan = transformWherePlanToConvex(rawWherePlan);
+
+  // 4. Transform data to Convex-safe format (apply pca_ prefix for Payload system fields, convert dates)
   const compiledData = data ? compileToConvex(data) : undefined;
 
-  // 4. Process sort into order (use direct order if provided)
+  // 5. Process sort into order (use direct order if provided)
   const order: "asc" | "desc" =
     inputOrder ||
     (typeof sort === "string" && sort.startsWith("-") ? "desc" : "asc");
 
-  // 5. Build pagination options if needed
+  // 6. Build pagination options if needed
   let paginationOpts: { numItems: number; cursor: string | null } | undefined;
   if (pagination && limit && page) {
     paginationOpts = {
@@ -1420,7 +1615,7 @@ function createAdapterQueryProcessor(
     };
   }
 
-  // 6. Build convex query props
+  // 7. Build convex query props
   const convexQueryProps: ProcessedConvexQueryProps = {
     collection: collectionId,
     wherePlan,

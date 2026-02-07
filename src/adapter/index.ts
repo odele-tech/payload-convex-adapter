@@ -253,10 +253,15 @@ export function convexAdapter(props: PayloadConvexAdapterProps) {
         },
 
         deleteVersions: async (deleteVersionsProps) => {
-          return await service.db.bindings.deletes.deleteVersions({
+          const result = await service.db.bindings.deletes.deleteVersions({
             service: service,
             incomingDeleteVersions: deleteVersionsProps,
           });
+
+          // Clear the recent version ID after cleanup is complete
+          service.system.clearRecentVersionId();
+
+          return result;
         },
 
         // Update

@@ -1,6 +1,6 @@
 import { createConvexClient } from './chunk-MBKD3Q5V.js';
-import { createServiceLogger, createSessionTracker, isClient, isDev, emptyWherePlan, createWherePlan, parseCollection, queryProcessor, createRandomID, bindings_exports } from './chunk-67I6IMQC.js';
-import { MutationAdapter, QueryAdapter } from './chunk-OTSZFWCO.js';
+import { createServiceLogger, createSessionTracker, isClient, isDev, emptyWherePlan, createWherePlan, parseCollection, queryProcessor, createRandomID, bindings_exports } from './chunk-3GHLE3TL.js';
+import { MutationAdapter, QueryAdapter } from './chunk-E3XPJ3KP.js';
 import { createDatabaseAdapter } from 'payload';
 import { anyApi } from 'convex/server';
 import 'child_process';
@@ -11,12 +11,31 @@ function createAdapterService(props) {
   const convexClient = createConvexClient({ convexUrl });
   const serviceLogger = createServiceLogger({ prefix });
   const sessionTracker = createSessionTracker();
+  let recentVersionId;
   const system = {
     url: convexUrl,
     prefix,
     logger: serviceLogger,
     isDev,
-    isClient
+    isClient,
+    /**
+     * Sets the ID of a recently created version to protect it from cleanup.
+     * This is used to coordinate between createVersion and deleteVersions operations.
+     */
+    setRecentVersionId: (id) => {
+      recentVersionId = id;
+    },
+    /**
+     * Gets the ID of the recently created version, if any.
+     * Returns undefined if no version was recently created.
+     */
+    getRecentVersionId: () => recentVersionId,
+    /**
+     * Clears the recent version ID after cleanup is complete.
+     */
+    clearRecentVersionId: () => {
+      recentVersionId = void 0;
+    }
   };
   const db = {
     client: convexClient,
@@ -178,10 +197,12 @@ function convexAdapter(props) {
           });
         },
         deleteVersions: async (deleteVersionsProps) => {
-          return await service.db.bindings.deletes.deleteVersions({
+          const result = await service.db.bindings.deletes.deleteVersions({
             service,
             incomingDeleteVersions: deleteVersionsProps
           });
+          service.system.clearRecentVersionId();
+          return result;
         },
         // Update
         updateOne: async (updateOneProps) => {
@@ -248,8 +269,7 @@ function convexAdapter(props) {
         },
         migrateFresh: async (migrateFreshProps) => {
           return await service.db.bindings.migrations.migrateFresh({
-            service,
-            incomingMigrateFresh: migrateFreshProps
+            service
           });
         },
         migrateRefresh: async () => {

@@ -14,6 +14,7 @@
  */
 
 import type { AdapterService } from "../adapter/service";
+import type { Where } from "payload";
 import {
   Create,
   CreateGlobal,
@@ -71,6 +72,133 @@ export type AdapterCreateMigrationProps = {
   /** The incoming createMigration parameters from Payload */
   incomingCreateMigration: Parameters<CreateMigration>[0];
 };
+
+// ============================================================================
+// Version Management Helpers
+// ============================================================================
+
+/**
+ * Unsets the 'latest' flag on older versions for a given parent document.
+ *
+ * This function mirrors the MongoDB adapter's behavior of maintaining only one
+ * version with `latest: true` at a time. When a new version is created, all
+ * older versions must have their `latest` flag unset.
+ *
+ * The function uses:
+ * - `parent: { equals: parentId }` to match versions of the same document
+ * - `latest: { equals: true }` to only update versions currently marked as latest
+ * - `updatedAt: { less_than: newTimestamp }` to only update older versions (strictly <)
+ *
+ * @param props - Configuration for unsetting latest flag
+ * @param props.service - The adapter service instance
+ * @param props.versionsCollection - The versions collection name (e.g., "posts_versions")
+ * @param props.parent - The parent document ID
+ * @param props.newUpdatedAt - The timestamp of the new version being created
+ * @internal
+ */
+async function unsetLatestOnOlderVersions(props: {
+  service: AdapterService;
+  versionsCollection: string;
+  parent: string | number;
+  newUpdatedAt: string;
+}) {
+  const { service, versionsCollection, parent, newUpdatedAt } = props;
+
+  // Build where clause to match older versions with latest: true
+  const where: Where = {
+    and: [
+      { parent: { equals: parent } },
+      { latest: { equals: true } },
+      { updatedAt: { less_than: newUpdatedAt } },
+    ],
+  };
+
+  // Process the query
+  const processedQuery = service.tools.queryProcessor({
+    service,
+    collection: versionsCollection,
+    where,
+    convex: false,
+  });
+
+  // Fetch documents to update
+  const docs = await service.db.query({}).collectionWhereQuery.adapter({
+    service,
+    ...processedQuery.convexQueryProps,
+  });
+
+  // Update each document to unset the latest flag
+  if (docs && docs.length > 0) {
+    await Promise.all(
+      docs.map((doc) =>
+        service.db.mutation({}).patch.adapter({
+          service,
+          id: doc._id as string,
+          data: { latest: undefined }, // Unset the field
+        })
+      )
+    );
+  }
+}
+
+/**
+ * Unsets the 'latest' flag on older global versions.
+ *
+ * Similar to `unsetLatestOnOlderVersions` but for global documents which don't
+ * have a parent ID. Only uses `latest` and `updatedAt` comparisons.
+ *
+ * @param props - Configuration for unsetting latest flag
+ * @param props.service - The adapter service instance
+ * @param props.versionsCollection - The global versions collection name
+ * @param props.newUpdatedAt - The timestamp of the new version being created
+ * @internal
+ */
+async function unsetLatestOnOlderGlobalVersions(props: {
+  service: AdapterService;
+  versionsCollection: string;
+  newUpdatedAt: string;
+}) {
+  const { service, versionsCollection, newUpdatedAt } = props;
+
+  // Build where clause for global versions (no parent field)
+  const where: Where = {
+    and: [
+      { latest: { equals: true } },
+      { updatedAt: { less_than: newUpdatedAt } },
+    ],
+  };
+
+  // Process the query
+  const processedQuery = service.tools.queryProcessor({
+    service,
+    collection: versionsCollection,
+    where,
+    convex: false,
+  });
+
+  // Fetch documents to update
+  const docs = await service.db.query({}).collectionWhereQuery.adapter({
+    service,
+    ...processedQuery.convexQueryProps,
+  });
+
+  // Update each document to unset the latest flag
+  if (docs && docs.length > 0) {
+    await Promise.all(
+      docs.map((doc) =>
+        service.db.mutation({}).patch.adapter({
+          service,
+          id: doc._id as string,
+          data: { latest: undefined }, // Unset the field
+        })
+      )
+    );
+  }
+}
+
+// ============================================================================
+// Create Operations
+// ============================================================================
 
 /**
  * Creates a new document in a collection.
@@ -190,6 +318,23 @@ export async function createGlobal(props: AdapterCreateGlobalProps) {
  *
  * Versions are stored in collections named `{collection}_versions`.
  *
+ * ## Version Management
+ *
+ * This function implements proper version lifecycle management that mirrors
+ * the MongoDB adapter's behavior:
+ *
+ * 1. **Unset Latest on Older Versions**: Before creating the new version, all older
+ *    versions with `latest: true` are updated to unset the flag. This ensures only
+ *    one version is marked as latest at any time.
+ *
+ * 2. **Create New Version**: Inserts the new version with `latest: true`.
+ *
+ * 3. **Track Version ID**: Stores the new version ID in the service context so that
+ *    subsequent deleteVersions operations can exclude it from cleanup.
+ *
+ * These steps prevent the newly created version from being immediately deleted
+ * during automatic cleanup operations.
+ *
  * @param {AdapterCreateVersionProps} props - The createVersion operation parameters
  * @returns {Promise<Awaited<ReturnType<CreateVersion>>>} The created version document
  *
@@ -227,7 +372,16 @@ export async function createVersion(props: AdapterCreateVersionProps) {
   // Versions are stored in a collection with "_versions" suffix
   const versionsCollection = `${collectionSlug}_versions`;
 
-  // Prepare version document with optional snapshot
+  // STEP 1: Unset 'latest' flag on all older versions for this parent
+  // This ensures only one version has latest: true at any time
+  await unsetLatestOnOlderVersions({
+    service,
+    versionsCollection,
+    parent,
+    newUpdatedAt: updatedAt,
+  });
+
+  // STEP 2: Prepare and insert the new version document
   const versionDoc: Record<string, unknown> = {
     parent,
     version: versionData,
@@ -249,6 +403,10 @@ export async function createVersion(props: AdapterCreateVersionProps) {
     collection: versionsCollection,
     data: versionDoc,
   });
+
+  // STEP 3: Track this version ID to protect it from immediate deletion
+  // The deleteVersions operation will use this to exclude the version from cleanup
+  service.system.setRecentVersionId(docId as string);
 
   // Only fetch if returning is true (default)
   if (!returning) {
@@ -280,6 +438,22 @@ export async function createVersion(props: AdapterCreateVersionProps) {
  * Creates a new version of a global document.
  *
  * Global versions are stored in collections named `{global}_global_versions`.
+ *
+ * ## Version Management
+ *
+ * Similar to `createVersion`, this function implements proper version lifecycle
+ * management for global documents:
+ *
+ * 1. **Unset Latest on Older Versions**: Before creating the new version, all older
+ *    global versions with `latest: true` are updated to unset the flag.
+ *
+ * 2. **Create New Version**: Inserts the new version with `latest: true`.
+ *
+ * 3. **Track Version ID**: Stores the new version ID in the service context for
+ *    protection during cleanup operations.
+ *
+ * Note: Global versions don't have a `parent` field since there's only one instance
+ * of each global document.
  *
  * @param {AdapterCreateGlobalVersionProps} props - The createGlobalVersion operation parameters
  * @returns {Promise<Awaited<ReturnType<CreateGlobalVersion>>>} The created global version document
@@ -318,7 +492,15 @@ export async function createGlobalVersion(
   // Global versions are stored in a collection with "_global_versions" suffix
   const globalVersionsCollection = `${globalSlug}_global_versions`;
 
-  // Prepare global version document (note: no parent field for globals)
+  // STEP 1: Unset 'latest' flag on all older global versions
+  // This ensures only one version has latest: true at any time
+  await unsetLatestOnOlderGlobalVersions({
+    service,
+    versionsCollection: globalVersionsCollection,
+    newUpdatedAt: updatedAt,
+  });
+
+  // STEP 2: Prepare and insert the new global version document
   const versionDoc: Record<string, unknown> = {
     version: versionData,
     autosave,
@@ -339,6 +521,9 @@ export async function createGlobalVersion(
     collection: globalVersionsCollection,
     data: versionDoc,
   });
+
+  // STEP 3: Track this version ID to protect it from immediate deletion
+  service.system.setRecentVersionId(docId as string);
 
   // Only fetch if returning is true (default)
   if (!returning) {

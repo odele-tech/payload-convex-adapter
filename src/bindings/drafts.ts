@@ -2,10 +2,12 @@
  * @fileoverview Query Drafts Operation Bindings
  *
  * This module implements Payload's queryDrafts operation for the Convex adapter.
- * Draft documents are unpublished versions of documents that can be queried
- * separately from published content.
+ * In Payload CMS, the admin list view calls queryDrafts for collections with
+ * versions.drafts enabled. It expects ALL documents to be returned (both draft
+ * and published), showing each document in its current state.
  *
- * Drafts are identified by a `_status` field set to 'draft'.
+ * Unlike the MongoDB/Postgres adapters which aggregate from the versions
+ * collection, this adapter queries the main collection directly.
  *
  * @module convex/bindings/queryDrafts
  */
@@ -24,10 +26,10 @@ export type AdapterQueryDraftsProps = {
 };
 
 /**
- * Queries draft documents from a collection.
+ * Queries documents from a draft-enabled collection.
  *
- * Draft documents have a `_status` field set to 'draft'.
- * This function returns paginated results of draft documents with
+ * Returns all documents (both draft and published) in their current state.
+ * This function returns paginated results with
  * support for filtering, sorting, and pagination.
  *
  * @param {AdapterQueryDraftsProps} props - The queryDrafts operation parameters
@@ -57,12 +59,17 @@ export async function queryDrafts(props: AdapterQueryDraftsProps) {
 
   service.system.logger("queryDrafts").dir();
 
-  // Combine the where clause with draft status filter
-  const draftWhere: Where = where
-    ? {
-        and: [where, { _status: { equals: "draft" } }],
-      }
-    : { _status: { equals: "draft" } };
+  // Pass the incoming where clause through as-is.
+  // Payload's admin list view calls queryDrafts for draft-enabled collections
+  // and expects ALL documents (both draft and published) to be returned.
+  //
+  // The official MongoDB/Postgres adapters implement queryDrafts by aggregating
+  // the versions collection (grouping by parent to get the latest version).
+  // Since this adapter queries the main collection (which always reflects the
+  // current document state), we return all matching documents without adding
+  // a _status filter. If Payload ever needs to filter by draft status, it will
+  // include that in the incoming where clause itself.
+  const draftWhere: Where = where ?? { id: { exists: true } };
 
   // Pass all incoming params to queryProcessor with draft where clause
   const processedQuery = service.tools.queryProcessor({
