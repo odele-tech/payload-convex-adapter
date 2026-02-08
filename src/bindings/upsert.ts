@@ -119,8 +119,6 @@ export async function upsert(props: AdapterUpsertProps) {
   const { service, incomingUpsert } = props;
   const { collection, data, returning = true } = incomingUpsert;
 
-  service.system.logger("upsert").dir();
-
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,

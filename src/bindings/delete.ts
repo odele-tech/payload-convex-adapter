@@ -75,8 +75,6 @@ export async function deleteOne(props: AdapterDeleteOneProps) {
   const { service, incomingDeleteOne } = props;
   const { returning = true } = incomingDeleteOne;
 
-  service.system.logger("deleteOne").dir();
-
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
@@ -133,8 +131,6 @@ export async function deleteOne(props: AdapterDeleteOneProps) {
 export async function deleteMany(props: AdapterDeleteManyProps) {
   const { service, incomingDeleteMany } = props;
 
-  service.system.logger("deleteMany").dir();
-
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
@@ -186,8 +182,6 @@ export async function deleteMany(props: AdapterDeleteManyProps) {
 export async function deleteVersions(props: AdapterDeleteVersionsProps) {
   const { service, incomingDeleteVersions } = props;
   const { collection, globalSlug, where, locale } = incomingDeleteVersions;
-
-  service.system.logger("deleteVersions").dir();
 
   // Determine the versions collection name
   const versionsCollection = collection

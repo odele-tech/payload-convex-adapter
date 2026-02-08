@@ -874,29 +874,10 @@ export function applyPostFilter(
 ): any[] {
   if (!postFilter) return documents;
 
-  if (debug) {
-    console.log("[applyPostFilter] Input docs:", documents.length);
-    console.log(
-      "[applyPostFilter] Filter:",
-      JSON.stringify(postFilter, null, 2)
-    );
-  }
-
   const result = documents.filter((doc) => {
     const passes = evaluateNode(doc, postFilter);
-    if (debug) {
-      console.log("[applyPostFilter] Doc evaluation:", {
-        docId: doc._id,
-        passes,
-        docKeys: Object.keys(doc).slice(0, 5),
-      });
-    }
     return passes;
   });
-
-  if (debug) {
-    console.log("[applyPostFilter] Output docs:", result.length);
-  }
 
   return result;
 }

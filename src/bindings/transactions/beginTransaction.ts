@@ -55,8 +55,6 @@ export async function beginTransaction(
 ) {
   const { service } = props;
 
-  service.system.logger("beginTransaction").dir();
-
   const id = service.tools.createRandomID();
   const session = service.tools.sessionTracker.createSession(id);
   return session.id;

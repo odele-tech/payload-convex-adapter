@@ -56,8 +56,6 @@ export async function commitTransaction(
 ) {
   const { service, incomingID } = props;
 
-  service.system.logger("commitTransaction").dir();
-
   const transactionID =
     incomingID instanceof Promise ? await incomingID : incomingID;
   const transactionIdStr = transactionID.toString();

@@ -57,8 +57,6 @@ export async function queryDrafts(props: AdapterQueryDraftsProps) {
     pagination = true,
   } = incomingQueryDrafts;
 
-  service.system.logger("queryDrafts").dir();
-
   // Pass the incoming where clause through as-is.
   // Payload's admin list view calls queryDrafts for draft-enabled collections
   // and expects ALL documents (both draft and published) to be returned.
