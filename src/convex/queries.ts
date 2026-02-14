@@ -132,10 +132,10 @@ export function convexGetById(props: ConvexGetByIdProps) {
       id: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-      if (!args.id)
-        return service.system
-          .logger("No ID provided for getById operation")
-          .warn();
+      if (!args.id) {
+        service.system.logger("No ID provided for getById operation").warn();
+        return null;
+      }
 
       // Direct ID lookup using Convex's native get method (O(1) performance)
       const doc = await ctx.db.get(args.id as any);
@@ -150,17 +150,11 @@ export function convexGetById(props: ConvexGetByIdProps) {
       const result = doc ? processor.toPayload(doc) : null;
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "getById",
-              args,
-              result: result,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "getById",
+          props: { collection: args.collection, id: args.id },
+          result: result,
+        })
         .log();
 
       return result;
@@ -181,22 +175,6 @@ export function convexGetById(props: ConvexGetByIdProps) {
  */
 export async function adapterGetById(props: AdapterGetByIdProps) {
   const { service, collection, id } = props;
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterGetById",
-            collection: collection,
-            id: id,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -286,17 +264,11 @@ export function convexCollectionQuery(props: ConvexCollectionQueryProps) {
       const query = await processor.query().toPayload();
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "collectionQuery",
-              args,
-              query,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "collectionQuery",
+          props: { collection: args.collection, index: args.index },
+          result: query,
+        })
         .log();
 
       return query;
@@ -325,22 +297,6 @@ export async function adapterCollectionQuery(
     index,
     convex: false,
   });
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterCollectionQuery",
-            collection: collection,
-            index: index,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -426,17 +382,11 @@ export function convexCollectionCountQuery(
       const result = data.length;
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "collectionCountQuery",
-              args: args,
-              result: result,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "collectionCountQuery",
+          props: { collection: args.collection, wherePlan: args.wherePlan },
+          result: result,
+        })
         .log();
 
       return result;
@@ -459,23 +409,6 @@ export async function adapterCollectionCountQuery(
   props: AdapterCollectionCountQueryProps
 ) {
   const { service, collection, wherePlan, index } = props;
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterCollectionCountQuery",
-            collection: collection,
-            wherePlan: wherePlan,
-            index: index,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -574,17 +507,11 @@ export function convexCollectionWhereQuery(
       const query = await processor.query().postFilter().toPayload();
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "collectionWhereQuery",
-              args,
-              query,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "collectionWhereQuery",
+          props: { collection: args.collection, wherePlan: args.wherePlan },
+          result: query,
+        })
         .log();
 
       return query;
@@ -607,23 +534,6 @@ export async function adapterCollectionWhereQuery(
   props: AdapterCollectionWhereQueryProps
 ) {
   const { service, collection, wherePlan, index } = props;
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterCollectionWhereQuery",
-            collection: collection,
-            wherePlan: wherePlan,
-            index: index,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -719,17 +629,11 @@ export function convexCollectionOrderQuery(
       const query = await processor.query().order(args.order).toPayload();
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "collectionOrderQuery",
-              args,
-              query,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "collectionOrderQuery",
+          props: { collection: args.collection, order: args.order },
+          result: query,
+        })
         .log();
 
       return query;
@@ -760,23 +664,6 @@ export async function adapterCollectionOrderQuery(
     index,
     convex: false,
   });
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterCollectionOrderQuery",
-            collection: collection,
-            order: order,
-            index: index,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -870,17 +757,11 @@ export function convexCollectionOrderLimitQuery(
         .toPayload();
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "collectionOrderLimitQuery",
-              args,
-              query,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "collectionOrderLimitQuery",
+          props: { collection: args.collection, order: args.order, limit: args.limit },
+          result: query,
+        })
         .log();
 
       return query;
@@ -913,24 +794,6 @@ export async function adapterCollectionOrderLimitQuery(
     index,
     convex: false,
   });
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterCollectionOrderLimitQuery",
-            collection: collection,
-            order: order,
-            limit: limit,
-            index: index,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -1028,17 +891,11 @@ export function convexCollectionOrderPaginateQuery(
         .toPayload();
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "collectionOrderPaginateQuery",
-              args,
-              query,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "collectionOrderPaginateQuery",
+          props: { collection: args.collection, order: args.order, paginationOpts: args.paginationOpts },
+          result: query,
+        })
         .log();
 
       return query;
@@ -1071,24 +928,6 @@ export async function adapterCollectionOrderPaginateQuery(
     index,
     convex: false,
   });
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterCollectionOrderPaginateQuery",
-            collection: collection,
-            order: order,
-            paginationOpts: paginationOpts,
-            index: index,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -1177,17 +1016,11 @@ export function convexCollectionLimitQuery(
       const query = await processor.query().take(args.limit).toPayload();
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "collectionLimitQuery",
-              args,
-              query,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "collectionLimitQuery",
+          props: { collection: args.collection, limit: args.limit },
+          result: query,
+        })
         .log();
 
       return query;
@@ -1218,23 +1051,6 @@ export async function adapterCollectionLimitQuery(
     index,
     convex: false,
   });
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterCollectionLimitQuery",
-            collection: collection,
-            limit: limit,
-            index: index,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -1322,20 +1138,14 @@ export function convexCollectionWhereOrderQuery(
         convex: true,
       });
 
-      const query = await processor.query().postFilter().toPayload();
+      const query = await processor.query().order(args.order).postFilter().toPayload();
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "collectionWhereOrderQuery",
-              args,
-              query,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "collectionWhereOrderQuery",
+          props: { collection: args.collection, wherePlan: args.wherePlan, order: args.order },
+          result: query,
+        })
         .log();
 
       return query;
@@ -1377,23 +1187,6 @@ export async function adapterCollectionWhereOrderQuery(
     processor.convexQueryProps
   )) as ConvexCollectionWhereOrderQueryResult;
 
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterCollectionWhereOrderQuery",
-            collection: collection,
-            wherePlan: wherePlan,
-            order: order,
-            index: index,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
   return query;
 }
 
@@ -1478,17 +1271,11 @@ export function convexCollectionWhereLimitQuery(
         .toPayload();
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "collectionWhereLimitQuery",
-              args,
-              query,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "collectionWhereLimitQuery",
+          props: { collection: args.collection, wherePlan: args.wherePlan, limit: args.limit },
+          result: query,
+        })
         .log();
 
       return query;
@@ -1521,24 +1308,6 @@ export async function adapterCollectionWhereLimitQuery(
     index,
     convex: false,
   });
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterCollectionWhereLimitQuery",
-            collection: collection,
-            wherePlan: wherePlan,
-            limit: limit,
-            index: index,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -1637,17 +1406,11 @@ export function convexCollectionWherePaginateQuery(
         .toPayload();
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "collectionWherePaginateQuery",
-              args,
-              query,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "collectionWherePaginateQuery",
+          props: { collection: args.collection, wherePlan: args.wherePlan, paginationOpts: args.paginationOpts },
+          result: query,
+        })
         .log();
 
       return query;
@@ -1680,24 +1443,6 @@ export async function adapterCollectionWherePaginateQuery(
     index,
     convex: false,
   });
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterCollectionWherePaginateQuery",
-            collection: collection,
-            wherePlan: wherePlan,
-            paginationOpts: paginationOpts,
-            index: index,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -1797,17 +1542,11 @@ export function convexCollectionWhereOrderLimitQuery(
         .toPayload();
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "collectionWhereOrderLimitQuery",
-              args,
-              query,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "collectionWhereOrderLimitQuery",
+          props: { collection: args.collection, wherePlan: args.wherePlan, order: args.order, limit: args.limit },
+          result: query,
+        })
         .log();
 
       return query;
@@ -1842,25 +1581,6 @@ export async function adapterCollectionWhereOrderLimitQuery(
     index,
     convex: false,
   });
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterCollectionWhereOrderLimitQuery",
-            collection: collection,
-            wherePlan: wherePlan,
-            order: order,
-            limit: limit,
-            index: index,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -1968,17 +1688,11 @@ export function convexCollectionWhereOrderPaginateQuery(
         .toPayload();
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "collectionWhereOrderPaginateQuery",
-              args,
-              query,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "collectionWhereOrderPaginateQuery",
+          props: { collection: args.collection, wherePlan: args.wherePlan, order: args.order, paginationOpts: args.paginationOpts },
+          result: query,
+        })
         .log();
 
       return query;
@@ -2014,25 +1728,6 @@ export async function adapterCollectionWhereOrderPaginateQuery(
     index,
     convex: false,
   });
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterCollectionWhereOrderPaginateQuery",
-            collection: collection,
-            wherePlan: wherePlan,
-            order: order,
-            paginationOpts: paginationOpts,
-            index: index,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;

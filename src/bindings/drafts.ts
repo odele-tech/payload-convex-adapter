@@ -2,18 +2,23 @@
  * @fileoverview Query Drafts Operation Bindings
  *
  * This module implements Payload's queryDrafts operation for the Convex adapter.
- * In Payload CMS, the admin list view calls queryDrafts for collections with
- * versions.drafts enabled. It expects ALL documents to be returned (both draft
- * and published), showing each document in its current state.
+ * In Payload CMS, when `draft: true` is passed to `payload.find()` on collections
+ * with versions.drafts enabled, Payload calls queryDrafts instead of find.
  *
- * Unlike the MongoDB/Postgres adapters which aggregate from the versions
- * collection, this adapter queries the main collection directly.
+ * This implementation queries the `{collection}_versions` table and intelligently
+ * handles two use cases:
+ * 1. **Latest versions only** (preview mode, admin list): Filters for `latest: true`
+ * 2. **All versions** (Versions tab): Returns all versions when querying by parent
+ *
+ * The version documents are unwrapped (extracting the `version` field) before
+ * returning to match Payload's expected format.
  *
  * @module convex/bindings/queryDrafts
  */
 
 import type { AdapterService } from "../adapter/service";
 import { QueryDrafts, type Where } from "payload";
+import { applySortField } from "../tools/query-processor";
 
 /**
  * Props for the queryDrafts operation.
@@ -51,40 +56,87 @@ export type AdapterQueryDraftsProps = {
 export async function queryDrafts(props: AdapterQueryDraftsProps) {
   const { service, incomingQueryDrafts } = props;
   const {
+    collection,
     where,
     limit = 10,
     page = 1,
     pagination = true,
   } = incomingQueryDrafts;
 
-  // Pass the incoming where clause through as-is.
-  // Payload's admin list view calls queryDrafts for draft-enabled collections
-  // and expects ALL documents (both draft and published) to be returned.
-  //
-  // The official MongoDB/Postgres adapters implement queryDrafts by aggregating
-  // the versions collection (grouping by parent to get the latest version).
-  // Since this adapter queries the main collection (which always reflects the
-  // current document state), we return all matching documents without adding
-  // a _status filter. If Payload ever needs to filter by draft status, it will
-  // include that in the incoming where clause itself.
-  const draftWhere: Where = where ?? { id: { exists: true } };
+  // Query the versions collection (not the main collection)
+  const versionsCollection = `${collection}_versions`;
 
-  // Pass all incoming params to queryProcessor with draft where clause
+  // Determine if this is a "list all versions" query or a "get latest version" query
+  // When the Versions tab queries for all versions of a document, it includes:
+  // - A 'parent' filter (to get versions of a specific document)
+  // - No 'latest' filter (wants all versions, not just latest)
+  // 
+  // For other queries (preview mode, admin list view), we want only the latest version
+  const whereStr = where ? JSON.stringify(where) : '';
+  const hasParentFilter = whereStr.includes('"parent"');
+  const hasLatestFilter = whereStr.includes('"latest"');
+  
+  // Extract parent value if present
+  let parentValue: string | undefined;
+  if (hasParentFilter && where && 'and' in where && Array.isArray(where.and)) {
+    for (const condition of where.and) {
+      if (condition && typeof condition === 'object' && 'parent' in condition) {
+        const parentCondition = condition.parent as any;
+        if (parentCondition && 'equals' in parentCondition) {
+          parentValue = parentCondition.equals;
+          break;
+        }
+      }
+    }
+  } else if (hasParentFilter && where && 'parent' in where) {
+    const parentCondition = (where as any).parent;
+    if (parentCondition && 'equals' in parentCondition) {
+      parentValue = parentCondition.equals;
+    }
+  }
+  
+  // If querying by parent without a latest filter, return all versions for that parent ONLY
+  // Otherwise, filter for latest versions only
+  const combinedWhere: Where = (hasParentFilter && !hasLatestFilter && parentValue)
+    ? { parent: { equals: parentValue } }  // Return ALL versions for this parent (Versions tab)
+    : {
+        and: [
+          { latest: { equals: true } },  // Only latest versions (preview mode, list view)
+          ...(where ? [where] : []),
+        ],
+      };
+
+  // Pass all incoming params to queryProcessor with versions collection
   const processedQuery = service.tools.queryProcessor({
     service,
     ...incomingQueryDrafts,
-    where: draftWhere,
+    collection: versionsCollection,
+    where: combinedWhere,
     convex: false,
   });
 
+  /**
+   * Transforms version documents to regular format.
+   * Unwraps the `version` field and assigns `parent` as `id`.
+   * Matches MongoDB adapter behavior (queryDrafts.ts lines 183-187).
+   */
+  function transformVersionDocs<T>(versionDocs: any[]): T[] {
+    return versionDocs.map((versionDoc) => {
+      const id = versionDoc.parent;
+      const doc = versionDoc.version ?? {};
+      doc.id = id;
+      return doc as T;
+    });
+  }
+
   // If pagination is disabled (limit = 0), fetch all draft documents
   if (!pagination || limit === 0) {
-    const rawDocs = await service.db.query({}).collectionWhereQuery.adapter({
+    const versionDocs = await service.db.query({}).collectionWhereQuery.adapter({
       service,
       ...processedQuery.convexQueryProps,
     });
 
-    const docs = processedQuery.processResult(rawDocs);
+    const docs = transformVersionDocs(versionDocs);
 
     return {
       docs,
@@ -112,14 +164,21 @@ export async function queryDrafts(props: AdapterQueryDraftsProps) {
   // Fetch documents with ordering and pagination
   const skip = (page - 1) * limit;
 
-  const allDocs = await service.db.query({}).collectionWhereOrderQuery.adapter({
+  const allVersionDocs = await service.db.query({}).collectionWhereOrderQuery.adapter({
     service,
     ...processedQuery.convexQueryProps,
     order: processedQuery.convexQueryProps.order ?? "desc",
   });
 
-  const rawDocs = allDocs.slice(skip, skip + limit);
-  const docs = processedQuery.processResult(rawDocs);
+  // Apply in-memory sort if the requested sort field differs from Convex's default (_creationTime)
+  const sortedVersionDocs = applySortField(
+    allVersionDocs,
+    processedQuery.convexQueryProps.sortField,
+    processedQuery.convexQueryProps.order ?? "desc"
+  );
+
+  const paginatedVersionDocs = sortedVersionDocs.slice(skip, skip + limit);
+  const docs = transformVersionDocs(paginatedVersionDocs);
 
   return {
     docs,

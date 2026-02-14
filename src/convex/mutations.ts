@@ -104,18 +104,11 @@ export function convexInsert(props: ConvexInsertProps) {
       );
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "insert",
-              args: args,
-              insertableData: insertableData,
-              result: result,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "insert",
+          props: { collection: args.collection, data: insertableData },
+          result: result,
+        })
         .log();
 
       return result;
@@ -167,25 +160,6 @@ export async function adapterInsert(props: AdapterInsertProps) {
     collection: processor.convexQueryProps.collection,
     data: insertableData,
   })) as ConvexInsertResult;
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterInsert",
-            collection: collection,
-            data: data,
-            compiledData: compiledData,
-            insertableData: insertableData,
-            queryResult: result,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   return result as string;
 }
@@ -245,21 +219,16 @@ export function convexGetByIdMutation(props: ConvexGetByIdMutationProps) {
     handler: async (ctx, args) => {
       const doc = await ctx.db.get(args.collection, args.id as any);
 
-      service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "getByIdMutation",
-              args: args,
-              result: doc,
-            },
-            null,
-            2
-          )
-        )
-        .log();
-
-      if (!doc) return null;
+      if (!doc) {
+        service.system
+          .logger({
+            fn: "getByIdMutation",
+            props: { collection: args.collection, id: args.id },
+            result: null,
+          })
+          .log();
+        return null;
+      }
 
       // Transform to Payload format
       const processor = service.tools.queryProcessor({
@@ -269,7 +238,17 @@ export function convexGetByIdMutation(props: ConvexGetByIdMutationProps) {
         convex: true,
       });
 
-      return processor.toPayload(doc);
+      const result = processor.toPayload(doc);
+
+      service.system
+        .logger({
+          fn: "getByIdMutation",
+          props: { collection: args.collection, id: args.id },
+          result: result,
+        })
+        .log();
+
+      return result;
     },
   });
 }
@@ -301,22 +280,6 @@ export async function adapterGetByIdMutation(
     collection: collectionId,
     id,
   })) as ConvexGetByIdMutationResult;
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterGetByIdMutation",
-            collection: collection,
-            id: id,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   return result;
 }
@@ -373,25 +336,21 @@ export function convexPatch(props: ConvexPatchProps) {
       data: v.any(),
     },
     handler: async (ctx, args) => {
-      if (!args.id)
-        return service.system
+      if (!args.id) {
+        service.system
           .logger("No ID provided for patch operation - cancelling operation")
           .warn();
+        return null;
+      }
 
       await ctx.db.patch(args.id as any, args.data);
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "patch",
-              args: args,
-              success: true,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "patch",
+          props: { id: args.id, data: args.data },
+          result: "success",
+        })
         .log();
 
       return null;
@@ -432,24 +391,6 @@ export async function adapterPatch<T>(props: AdapterPatchProps<T>) {
       continue;
     }
     patchableData[key] = value;
-  }
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterPatch",
-            id: id,
-            data: data,
-            compiledData: compiledData,
-            patchableData: patchableData,
-          },
-          null,
-          2
-        )
-      )
-      .log();
   }
 
   const client = service.db.client.directClient;
@@ -519,17 +460,11 @@ export function convexReplace(props: ConvexReplaceProps) {
       await ctx.db.replace(args.id as any, args.data);
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "replace",
-              args: args,
-              success: true,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "replace",
+          props: { id: args.id, data: args.data },
+          result: "success",
+        })
         .log();
 
       return null;
@@ -561,23 +496,6 @@ export async function adapterReplace<T>(props: AdapterReplaceProps<T>) {
     convex: false,
   });
   const compiledData = processor.convexQueryProps.data!;
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterReplace",
-            id: id,
-            data: data,
-            compiledData: compiledData,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -642,17 +560,11 @@ export function convexDeleteOp(props: ConvexDeleteProps) {
       await ctx.db.delete(args.id as any);
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "delete",
-              args: args,
-              success: true,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "delete",
+          props: { id: args.id },
+          result: "success",
+        })
         .log();
 
       return null;
@@ -671,21 +583,6 @@ export function convexDeleteOp(props: ConvexDeleteProps) {
  */
 export async function adapterDeleteOp(props: AdapterDeleteProps) {
   const { service, id } = props;
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterDelete",
-            id: id,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -785,19 +682,11 @@ export function convexUpsert(props: ConvexUpsertProps) {
       }
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "upsert",
-              args: args,
-              upsertableData: upsertableData,
-              docId: docId,
-              wasUpdate: wasUpdate,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "upsert",
+          props: { collection: args.collection, id: args.id, data: upsertableData },
+          result: { docId: docId, wasUpdate: wasUpdate },
+        })
         .log();
 
       return docId;
@@ -843,25 +732,6 @@ export async function adapterUpsert<T>(props: AdapterUpsertProps<T>) {
       continue;
     }
     upsertableData[key] = value;
-  }
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterUpsert",
-            collection: collection,
-            id: id,
-            data: data,
-            compiledData: compiledData,
-            upsertableData: upsertableData,
-          },
-          null,
-          2
-        )
-      )
-      .log();
   }
 
   const client = service.db.client.directClient;
@@ -946,17 +816,11 @@ export function convexUpdateManyWhere(props: ConvexUpdateManyWhereProps) {
       );
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "updateManyWhere",
-              args: args,
-              docsUpdated: docs.length,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "updateManyWhere",
+          props: { collection: args.collection, wherePlan: args.wherePlan, data: args.data },
+          result: { docsUpdated: docs.length },
+        })
         .log();
 
       return docs.length;
@@ -990,24 +854,6 @@ export async function adapterUpdateManyWhere<T>(
   });
 
   const compiledData = processor.convexQueryProps.data!;
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterUpdateManyWhere",
-            collection: collection,
-            wherePlan: wherePlan,
-            data: data,
-            compiledData: compiledData,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -1090,17 +936,11 @@ export function convexDeleteManyWhere(props: ConvexDeleteManyWhereProps) {
       await Promise.all(docs.map((doc) => ctx.db.delete(doc._id as any)));
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "deleteManyWhere",
-              args: args,
-              docsDeleted: docs.length,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "deleteManyWhere",
+          props: { collection: args.collection, wherePlan: args.wherePlan },
+          result: { docsDeleted: docs.length },
+        })
         .log();
 
       return docs.length;
@@ -1124,22 +964,6 @@ export async function adapterDeleteManyWhere(
   props: AdapterDeleteManyWhereProps
 ) {
   const { service, collection, wherePlan } = props;
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterDeleteManyWhere",
-            collection: collection,
-            wherePlan: wherePlan,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -1276,18 +1100,11 @@ export function convexIncrement(props: ConvexIncrementProps) {
       const doc = await ctx.db.get(args.id as any);
       if (!doc) {
         service.system
-          .logger(
-            JSON.stringify(
-              {
-                operation: "increment",
-                args: args,
-                result: null,
-                error: "Document not found",
-              },
-              null,
-              2
-            )
-          )
+          .logger({
+            fn: "increment",
+            props: { id: args.id, field: args.field, amount: args.amount },
+            error: "Document not found",
+          })
           .log();
         return null;
       }
@@ -1302,19 +1119,11 @@ export function convexIncrement(props: ConvexIncrementProps) {
       });
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "increment",
-              args: args,
-              convexField: convexField,
-              previousValue: currentValue,
-              newValue: newValue,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "increment",
+          props: { id: args.id, field: args.field, amount: args.amount },
+          result: { previousValue: currentValue, newValue: newValue },
+        })
         .log();
 
       return { newValue };
@@ -1335,23 +1144,6 @@ export function convexIncrement(props: ConvexIncrementProps) {
  */
 export async function adapterIncrement(props: AdapterIncrementProps) {
   const { service, id, field, amount } = props;
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterIncrement",
-            id: id,
-            field: field,
-            amount: amount,
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;
@@ -1421,16 +1213,11 @@ export function convexTransactional(props: ConvexTransactionalProps) {
       const safeResult = result === undefined ? null : result;
 
       service.system
-        .logger(
-          JSON.stringify(
-            {
-              operation: "transactional",
-              result: safeResult,
-            },
-            null,
-            2
-          )
-        )
+        .logger({
+          fn: "transactional",
+          props: {},
+          result: safeResult,
+        })
         .log();
 
       return safeResult;
@@ -1452,21 +1239,6 @@ export async function adapterTransactional<T>(
   props: AdapterTransactionalProps<T>
 ) {
   const { service, run } = props;
-
-  if (service.system.isDev) {
-    service.system
-      .logger(
-        JSON.stringify(
-          {
-            adapter: "adapterTransactional",
-            message: "Executing transactional operation",
-          },
-          null,
-          2
-        )
-      )
-      .log();
-  }
 
   const client = service.db.client.directClient;
   const api = service.db.api;

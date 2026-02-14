@@ -19,6 +19,7 @@ import { DeleteOne, DeleteMany, DeleteVersions } from "payload";
 import {
   convertLteToLtForUpdatedAt,
   addVersionIdExclusion,
+  addPublishedVersionExclusion,
 } from "../tools/query-processor";
 
 /**
@@ -153,8 +154,8 @@ export async function deleteMany(props: AdapterDeleteManyProps) {
  *
  * ## Version Deletion Safeguards
  *
- * To prevent newly created versions from being immediately deleted, this function applies
- * two safeguards that mirror the MongoDB adapter's behavior:
+ * To prevent important versions from being deleted during cleanup, this function applies
+ * three safeguards:
  *
  * 1. **Timestamp Conversion**: Converts `less_than_equal` to `less_than` for `updatedAt`
  *    comparisons. This prevents deletion of versions with exactly matching timestamps.
@@ -162,7 +163,11 @@ export async function deleteMany(props: AdapterDeleteManyProps) {
  * 2. **ID Exclusion**: Excludes the recently created version ID (if tracked in service context)
  *    from the deletion query.
  *
- * These safeguards ensure that the version created immediately before cleanup is preserved.
+ * 3. **Published Version Protection**: Excludes versions where `version._status === 'published'`
+ *    from deletion. Published versions represent live content and must always be preserved.
+ *
+ * These safeguards ensure that the version created immediately before cleanup is preserved,
+ * and that published versions are never inadvertently deleted.
  *
  * @param {AdapterDeleteVersionsProps} props - The deleteVersions operation parameters
  * @returns {Promise<Awaited<ReturnType<DeleteVersions>>>} void
@@ -184,9 +189,10 @@ export async function deleteVersions(props: AdapterDeleteVersionsProps) {
   const { collection, globalSlug, where, locale } = incomingDeleteVersions;
 
   // Determine the versions collection name
+  // Collection versions use "_versions" suffix, global versions use "_global_versions" suffix
   const versionsCollection = collection
     ? `${collection}_versions`
-    : `${globalSlug}_versions`;
+    : `${globalSlug}_global_versions`;
 
   // Process the where clause into a WherePlan
   const processedQuery = service.tools.queryProcessor({
@@ -211,6 +217,10 @@ export async function deleteVersions(props: AdapterDeleteVersionsProps) {
       recentVersionId
     );
   }
+
+  // SAFEGUARD 3: Never delete published versions during cleanup
+  // Published versions represent live content and must always be preserved
+  safeguardedWherePlan = addPublishedVersionExclusion(safeguardedWherePlan);
 
   // Delete with safeguarded filter
   await service.db.mutation({}).deleteManyWhere.adapter({

@@ -392,6 +392,55 @@ export function addVersionIdExclusion(
 }
 
 /**
+ * Adds a post-filter exclusion to protect published versions from deletion.
+ *
+ * During version cleanup (enforceMaxVersions), Payload deletes older versions
+ * beyond the maxPerDoc limit. Without this safeguard, published versions can be
+ * inadvertently deleted because they match the `updatedAt < X` filter.
+ *
+ * This adds a postFilter condition that excludes versions where
+ * `version._status === 'published'`, ensuring published content is always preserved.
+ * Uses postFilter because `version._status` is a nested field path.
+ *
+ * @param wherePlan - The WherePlan to add exclusion to
+ * @returns WherePlan with published version exclusion added
+ *
+ * @example
+ * ```typescript
+ * const protected = addPublishedVersionExclusion(wherePlan);
+ * // Ensures published versions are never deleted during cleanup
+ * ```
+ */
+export function addPublishedVersionExclusion(
+  wherePlan: EnhancedParsedWhereFilter
+): EnhancedParsedWhereFilter {
+  // version._status is a nested field, so it must use postFilter
+  const publishedExclusionNode: WhereNode = {
+    type: "comparison",
+    comparison: {
+      field: "version._status",
+      operator: "not_equals",
+      value: "published",
+    },
+  };
+
+  // Add to postFilter (nested field paths can't use dbFilter)
+  const newPostFilter = wherePlan.postFilter
+    ? {
+        type: "and" as const,
+        nodes: [wherePlan.postFilter, publishedExclusionNode],
+      }
+    : publishedExclusionNode;
+
+  return {
+    strategy:
+      wherePlan.strategy === "db" ? "hybrid" : wherePlan.strategy,
+    dbFilter: wherePlan.dbFilter,
+    postFilter: newPostFilter,
+  };
+}
+
+/**
  * Parses a Payload Where object into an enhanced filter with hybrid filtering support.
  *
  * This function runs on the client/adapter side and converts Payload's
@@ -903,6 +952,68 @@ export function applyWherePlan<T extends any>(
 }
 
 // ============================================================================
+// Post-Sort Utility
+// ============================================================================
+
+/**
+ * Applies in-memory sorting to documents when the requested sort field
+ * differs from Convex's default `_creationTime` ordering.
+ *
+ * Convex's `.order()` only sorts by `_creationTime` (the insertion timestamp).
+ * When Payload requests sorting by a different field (e.g., `updatedAt`),
+ * the binding layer should call this function after fetching results.
+ *
+ * For fields that match Convex's default ordering (`createdAt`, `id`, or
+ * undefined), this function returns the documents unchanged.
+ *
+ * @param docs - Array of Payload-formatted documents to sort
+ * @param sortField - The Payload field name to sort by (e.g., "updatedAt")
+ * @param order - Sort direction ("asc" or "desc")
+ * @returns Sorted array of documents
+ *
+ * @example
+ * ```typescript
+ * const allDocs = await service.db.query({}).collectionWhereOrderQuery.adapter({ ... });
+ * const sorted = applySortField(allDocs, processedQuery.convexQueryProps.sortField, "desc");
+ * const docs = sorted.slice(skipAmount, skipAmount + limit);
+ * ```
+ */
+export function applySortField<T extends Record<string, any>>(
+  docs: T[],
+  sortField: string | undefined,
+  order: "asc" | "desc" = "desc"
+): T[] {
+  // Fields that match Convex's default ordering - no post-sort needed
+  if (
+    !sortField ||
+    sortField === "createdAt" ||
+    sortField === "id" ||
+    sortField === "_creationTime" ||
+    sortField === "_id"
+  ) {
+    return docs;
+  }
+
+  // Sort in memory by the requested field
+  const sorted = [...docs].sort((a, b) => {
+    const aVal = a[sortField];
+    const bVal = b[sortField];
+
+    // Handle null/undefined - push to end
+    if (aVal == null && bVal == null) return 0;
+    if (aVal == null) return 1;
+    if (bVal == null) return -1;
+
+    // Compare values
+    if (aVal < bVal) return order === "asc" ? -1 : 1;
+    if (aVal > bVal) return order === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  return sorted;
+}
+
+// ============================================================================
 // Data Compilation (migrated from data-compiler.ts)
 // ============================================================================
 
@@ -1091,10 +1202,53 @@ function transformObjectToConvex(obj: PayloadData): ConvexData {
 }
 
 /**
+ * Known date field name suffixes for precise timestamp-to-ISO conversion.
+ * Only field names ending with these suffixes (case-insensitive) will have
+ * numeric timestamps converted to ISO date strings.
+ *
+ * This replaces the previous broad heuristic that matched any field containing
+ * "at", "date", or "time" (which false-positived on fields like "category",
+ * "status", "format", "platform", "latitude", "path", "batch", etc.).
+ */
+const DATE_FIELD_SUFFIXES = [
+  "At",        // createdAt, updatedAt, publishedAt, deletedAt, expiresAt, etc.
+  "Date",      // startDate, endDate, birthDate, etc.
+  "Time",      // startTime, endTime, etc.
+  "Timestamp", // loginTimestamp, etc.
+];
+
+/**
+ * Checks if a field key represents a date field using precise suffix matching.
+ * Handles both top-level keys and nested paths (uses the last segment).
+ *
+ * @internal
+ */
+function isDateField(key: string): boolean {
+  // Skip known non-date system fields
+  if (
+    key === "_creationTime" ||
+    key === "_updatedTime" ||
+    key === "_id" ||
+    key === "id"
+  ) {
+    return false;
+  }
+
+  // For nested paths like "version.updatedAt", check the last segment
+  const lastSegment = key.includes(".") ? key.split(".").pop()! : key;
+
+  // Check if the last segment ends with a known date suffix (case-insensitive)
+  const lower = lastSegment.toLowerCase();
+  return DATE_FIELD_SUFFIXES.some((suffix) =>
+    lower.endsWith(suffix.toLowerCase())
+  );
+}
+
+/**
  * Recursively transforms a value from Convex to Payload format.
  *
  * Processes:
- * - Timestamps → ISO date strings (for date-like fields)
+ * - Timestamps → ISO date strings (for known date fields using suffix matching)
  * - Arrays/objects recursively for dates
  *
  * Does NOT transform field names (only done at top level).
@@ -1105,18 +1259,8 @@ function transformValueToPayload(value: any, key: string = ""): any {
     return value;
   }
 
-  // Handle timestamps - convert to ISO strings for date-like fields
-  if (
-    typeof value === "number" &&
-    key !== "_creationTime" &&
-    key !== "_updatedTime" &&
-    key !== "_id" &&
-    key !== "id" &&
-    // Detect date-like field names
-    (key.toLowerCase().includes("at") ||
-      key.toLowerCase().includes("date") ||
-      key.toLowerCase().includes("time"))
-  ) {
+  // Handle timestamps - convert to ISO strings for known date fields
+  if (typeof value === "number" && isDateField(key)) {
     // Check if it's a reasonable timestamp (between year 2000 and 2100)
     const year2000 = 946684800000;
     const year2100 = 4102444800000;
@@ -1393,6 +1537,13 @@ export type ProcessedConvexQueryProps = {
   limit?: number;
   /** Sort order */
   order?: "asc" | "desc";
+  /**
+   * The field name to sort by (in Payload format, e.g. "updatedAt", "createdAt").
+   * When this differs from Convex's default _creationTime ordering, the binding
+   * layer should apply an in-memory post-sort on the fetched results.
+   * Undefined means use the default Convex ordering (_creationTime).
+   */
+  sortField?: string;
   /** Pagination options */
   paginationOpts?: { numItems: number; cursor: string | null };
   /** Optional index configuration */
@@ -1406,16 +1557,6 @@ export type ProcessedConvexQueryProps = {
 export type AdapterQueryProcessor = {
   /** Processed query props ready to pass to Convex */
   convexQueryProps: ProcessedConvexQueryProps;
-  /** Process results from Convex back to Payload format */
-  processResult<T>(result: T): T;
-  /** Process Convex query results (alias for processResult) */
-  processConvexQueryResult<T>(result: T): T;
-  /** Process paginated results from Convex */
-  processPaginatedResult<T>(result: {
-    page: T[];
-    continueCursor: string;
-    isDone: boolean;
-  }): { page: T[]; continueCursor: string; isDone: boolean };
   /** Compile data to Convex format (for direct use) */
   compileToConvex<T>(data: T): T;
   /** Compile data to Payload format (for direct use) */
@@ -1546,7 +1687,8 @@ export type ConvexQueryProcessorProps = {
  *   processedQuery.convexQueryProps
  * );
  *
- * return processedQuery.processResult(result);
+ * // Result is already in Payload format from .toPayload() in Convex function
+ * return result;
  * ```
  */
 function createAdapterQueryProcessor(
@@ -1582,10 +1724,24 @@ function createAdapterQueryProcessor(
   // 4. Transform data to Convex-safe format (apply pca_ prefix for Payload system fields, convert dates)
   const compiledData = data ? compileToConvex(data) : undefined;
 
-  // 5. Process sort into order (use direct order if provided)
+  // 5. Process sort into order and field (use direct order if provided)
+  let sortField: string | undefined;
   const order: "asc" | "desc" =
     inputOrder ||
     (typeof sort === "string" && sort.startsWith("-") ? "desc" : "asc");
+
+  // Extract the sort field name from the sort string (e.g., "-updatedAt" → "updatedAt")
+  if (typeof sort === "string") {
+    sortField = sort.startsWith("-") || sort.startsWith("+")
+      ? sort.slice(1)
+      : sort;
+  } else if (Array.isArray(sort) && sort.length > 0) {
+    // Use the first sort field for primary sorting
+    const primary = sort[0];
+    sortField = primary.startsWith("-") || primary.startsWith("+")
+      ? primary.slice(1)
+      : primary;
+  }
 
   // 6. Build pagination options if needed
   let paginationOpts: { numItems: number; cursor: string | null } | undefined;
@@ -1603,32 +1759,13 @@ function createAdapterQueryProcessor(
     data: compiledData,
     limit,
     order,
+    sortField,
     paginationOpts,
     index,
   };
 
   return {
     convexQueryProps,
-
-    // Process results from Convex back to Payload format
-    processResult<T>(result: T): T {
-      const compiled = compileToPayload(result);
-      return (compiled ?? result) as T;
-    },
-
-    processConvexQueryResult<T>(result: T): T {
-      const compiled = compileToPayload(result);
-      return (compiled ?? result) as T;
-    },
-
-    // Helper for paginated results
-    processPaginatedResult<T>(result: {
-      page: T[];
-      continueCursor: string;
-      isDone: boolean;
-    }) {
-      return compilePaginatedToPayload(result);
-    },
 
     // Direct compilation methods
     compileToConvex<T>(data: T): T {
@@ -1904,7 +2041,8 @@ function createConvexQueryProcessor(
  *   processedQuery.convexQueryProps
  * );
  *
- * return processedQuery.processResult(result);
+ * // Result is already in Payload format from .toPayload() in Convex function
+ * return result;
  * ```
  *
  * @example Convex-side usage:

@@ -249,16 +249,7 @@ export async function updateOne(props: AdapterUpdateOneProps) {
     );
   }
 
-  // Process result through queryProcessor for format conversion
-  const processedQuery = service.tools.queryProcessor({
-    service,
-    ...incomingUpdateOne,
-    convex: false,
-  });
-
-  return processedQuery.processResult(updatedDoc) as Awaited<
-    ReturnType<UpdateOne>
-  >;
+  return updatedDoc as Awaited<ReturnType<UpdateOne>>;
 }
 
 /**
@@ -338,9 +329,7 @@ export async function updateMany(props: AdapterUpdateManyProps) {
   // Apply limit to returned docs if provided
   const rawDocs = limit ? updatedDocs.slice(0, limit) : updatedDocs;
 
-  return processedQuery.processResult(rawDocs) as Awaited<
-    ReturnType<UpdateMany>
-  >;
+  return rawDocs as Awaited<ReturnType<UpdateMany>>;
 }
 
 /**
@@ -405,17 +394,7 @@ export async function updateGlobal(props: AdapterUpdateGlobalProps) {
     id: docId,
   });
 
-  // Process result through queryProcessor for format conversion
-  const processedQuery = service.tools.queryProcessor({
-    service,
-    ...incomingUpdateGlobal,
-    collection: globalCollection,
-    convex: false,
-  });
-
-  return processedQuery.processResult(updatedDoc) as unknown as Awaited<
-    ReturnType<UpdateGlobal>
-  >;
+  return updatedDoc as unknown as Awaited<ReturnType<UpdateGlobal>>;
 }
 
 /**
@@ -482,12 +461,18 @@ export async function updateVersion(props: AdapterUpdateVersionProps) {
     throw new Error("updateVersion requires either id or where parameter");
   }
 
+  // Remap createdAt to pca_createdAt so it survives the patch pipeline.
+  // The key transformer maps createdAt → _creationTime (a read-only Convex
+  // system field) which gets stripped. Using pca_createdAt matches the storage
+  // format used by createVersion and round-trips correctly on read.
+  const patchData = { ...(versionData as Record<string, unknown>) };
+  if ("createdAt" in patchData) {
+    patchData.pca_createdAt = patchData.createdAt;
+    delete patchData.createdAt;
+  }
+
   // Update the version document
-  await applyPatchWithIncrements(
-    service,
-    docId,
-    versionData as Record<string, unknown>
-  );
+  await applyPatchWithIncrements(service, docId, patchData);
 
   // Only fetch if returning is true (default)
   if (!returning) {
@@ -501,17 +486,7 @@ export async function updateVersion(props: AdapterUpdateVersionProps) {
     id: docId,
   });
 
-  // Process result through queryProcessor for format conversion
-  const processedQuery = service.tools.queryProcessor({
-    service,
-    ...incomingUpdateVersion,
-    collection: versionsCollection,
-    convex: false,
-  });
-
-  return processedQuery.processResult(updatedDoc) as Awaited<
-    ReturnType<UpdateVersion>
-  >;
+  return updatedDoc as Awaited<ReturnType<UpdateVersion>>;
 }
 
 /**
@@ -582,12 +557,18 @@ export async function updateGlobalVersion(
     );
   }
 
+  // Remap createdAt to pca_createdAt so it survives the patch pipeline.
+  // The key transformer maps createdAt → _creationTime (a read-only Convex
+  // system field) which gets stripped. Using pca_createdAt matches the storage
+  // format used by createGlobalVersion and round-trips correctly on read.
+  const patchData = { ...(versionData as Record<string, unknown>) };
+  if ("createdAt" in patchData) {
+    patchData.pca_createdAt = patchData.createdAt;
+    delete patchData.createdAt;
+  }
+
   // Update the global version document
-  await applyPatchWithIncrements(
-    service,
-    docId,
-    versionData as Record<string, unknown>
-  );
+  await applyPatchWithIncrements(service, docId, patchData);
 
   // Only fetch if returning is true (default)
   if (!returning) {
@@ -601,17 +582,7 @@ export async function updateGlobalVersion(
     id: docId,
   });
 
-  // Process result through queryProcessor for format conversion
-  const processedQuery = service.tools.queryProcessor({
-    service,
-    ...incomingUpdateGlobalVersion,
-    collection: globalVersionsCollection,
-    convex: false,
-  });
-
-  return processedQuery.processResult(updatedDoc) as Awaited<
-    ReturnType<UpdateGlobalVersion>
-  >;
+  return updatedDoc as Awaited<ReturnType<UpdateGlobalVersion>>;
 }
 
 /**
@@ -661,17 +632,7 @@ export async function updateJobs(props: AdapterUpdateJobsProps) {
       id: id as string,
     });
 
-    // Process result through queryProcessor for format conversion
-    const processedQuery = service.tools.queryProcessor({
-      service,
-      ...incomingUpdateJobs,
-      collection: jobsCollection,
-      convex: false,
-    });
-
-    return [processedQuery.processResult(updatedJob)] as Awaited<
-      ReturnType<UpdateJobs>
-    >;
+    return [updatedJob] as Awaited<ReturnType<UpdateJobs>>;
   }
 
   // Otherwise, update jobs matching the where clause
@@ -726,9 +687,7 @@ export async function updateJobs(props: AdapterUpdateJobsProps) {
           ...processedQuery.convexQueryProps,
         });
 
-    return processedQuery.processResult(updatedJobs) as Awaited<
-      ReturnType<UpdateJobs>
-    >;
+    return updatedJobs as Awaited<ReturnType<UpdateJobs>>;
   }
 
   throw new Error("updateJobs requires either id or where parameter");

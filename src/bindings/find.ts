@@ -27,9 +27,10 @@ import {
   FindVersions,
   FindGlobalVersions,
 } from "payload";
+import { applySortField } from "../tools/query-processor";
 
 /**
- * Props for the find operation.
+ * Props for the find operation.w
  */
 export type AdapterFindProps = {
   /** The adapter service instance */
@@ -138,12 +139,10 @@ export async function find(props: AdapterFindProps) {
 
   // If pagination is disabled (limit = 0), fetch all documents
   if (!pagination || limit === 0) {
-    const rawDocs = await service.db.query({}).collectionWhereQuery.adapter({
+    const docs = await service.db.query({}).collectionWhereQuery.adapter({
       service,
       ...processedQuery.convexQueryProps,
     });
-
-    const docs = processedQuery.processResult(rawDocs);
 
     return {
       docs,
@@ -164,11 +163,11 @@ export async function find(props: AdapterFindProps) {
   });
 
   const totalPages = Math.ceil(totalDocs / limit);
-  const hasNextPage = page < totalPages;
-  const hasPrevPage = page > 1;
-  const pagingCounter = (page - 1) * limit + 1;
+  const hasNextPage = effectivePage < totalPages;
+  const hasPrevPage = effectivePage > 1;
+  const pagingCounter = (effectivePage - 1) * limit + 1;
 
-  // Fetch all matching documents with order, then slice for pagination
+  // Fetch all matching documents with order, then apply post-sort and slice for pagination
   // TODO: Optimize with cursor-based pagination when available
   const allDocs = await service.db.query({}).collectionWhereOrderQuery.adapter({
     service,
@@ -176,9 +175,15 @@ export async function find(props: AdapterFindProps) {
     order: processedQuery.convexQueryProps.order ?? "desc",
   });
 
+  // Apply in-memory sort if the requested sort field differs from Convex's default (_creationTime)
+  const sortedDocs = applySortField(
+    allDocs,
+    processedQuery.convexQueryProps.sortField,
+    processedQuery.convexQueryProps.order ?? "desc"
+  );
+
   const skipAmount = skip !== undefined ? skip : (effectivePage - 1) * limit;
-  const rawDocs = allDocs.slice(skipAmount, skipAmount + limit);
-  const docs = processedQuery.processResult(rawDocs);
+  const docs = sortedDocs.slice(skipAmount, skipAmount + limit);
 
   return {
     docs,
@@ -222,7 +227,7 @@ export async function findOne(props: AdapterFindOneProps) {
     return null as Awaited<ReturnType<FindOne>>;
   }
 
-  return processedQuery.processResult(docs[0]) as Awaited<ReturnType<FindOne>>;
+  return docs[0] as Awaited<ReturnType<FindOne>>;
 }
 
 /**
@@ -252,12 +257,9 @@ export async function findDistinct(props: AdapterFindDistinctProps) {
     order: processedQuery.convexQueryProps.order ?? "desc",
   });
 
-  // Transform documents to Payload format for field extraction
-  const processedDocs = processedQuery.processResult(allDocs);
-
   // Extract distinct values for the specified field
   const valueSet = new Set<any>();
-  for (const doc of processedDocs) {
+  for (const doc of allDocs) {
     const value = (doc as Record<string, any>)[field];
     if (value !== undefined && value !== null) {
       valueSet.add(value);
@@ -324,9 +326,7 @@ export async function findGlobal(props: AdapterFindGlobalProps) {
     return {} as Awaited<ReturnType<FindGlobal>>;
   }
 
-  return processedQuery.processResult(docs[0]) as Awaited<
-    ReturnType<FindGlobal>
-  >;
+  return docs[0] as Awaited<ReturnType<FindGlobal>>;
 }
 
 /**
@@ -365,12 +365,11 @@ export async function findVersions(props: AdapterFindVersionsProps) {
 
   // If pagination is disabled (limit = 0), fetch all documents
   if (!pagination || limit === 0) {
-    const rawDocs = await service.db.query({}).collectionWhereQuery.adapter({
+    const docs = await service.db.query({}).collectionWhereOrderQuery.adapter({
       service,
       ...processedQuery.convexQueryProps,
+      order: processedQuery.convexQueryProps.order ?? "desc",
     });
-
-    const docs = processedQuery.processResult(rawDocs);
 
     return {
       docs,
@@ -391,11 +390,11 @@ export async function findVersions(props: AdapterFindVersionsProps) {
   });
 
   const totalPages = Math.ceil(totalDocs / limit);
-  const hasNextPage = page < totalPages;
-  const hasPrevPage = page > 1;
-  const pagingCounter = (page - 1) * limit + 1;
+  const hasNextPage = effectivePage < totalPages;
+  const hasPrevPage = effectivePage > 1;
+  const pagingCounter = (effectivePage - 1) * limit + 1;
 
-  // Fetch all matching documents with order, then slice for pagination
+  // Fetch all matching documents with order, then apply post-sort and slice for pagination
   const skipAmount = skip !== undefined ? skip : (effectivePage - 1) * limit;
 
   const allDocs = await service.db.query({}).collectionWhereOrderQuery.adapter({
@@ -404,8 +403,14 @@ export async function findVersions(props: AdapterFindVersionsProps) {
     order: processedQuery.convexQueryProps.order ?? "desc",
   });
 
-  const rawDocs = allDocs.slice(skipAmount, skipAmount + limit);
-  const docs = processedQuery.processResult(rawDocs);
+  // Apply in-memory sort if the requested sort field differs from Convex's default (_creationTime)
+  const sortedDocs = applySortField(
+    allDocs,
+    processedQuery.convexQueryProps.sortField,
+    processedQuery.convexQueryProps.order ?? "desc"
+  );
+
+  const docs = sortedDocs.slice(skipAmount, skipAmount + limit);
 
   return {
     docs,
@@ -459,12 +464,11 @@ export async function findGlobalVersions(
 
   // If pagination is disabled (limit = 0), fetch all documents
   if (!pagination || limit === 0) {
-    const rawDocs = await service.db.query({}).collectionWhereQuery.adapter({
+    const docs = await service.db.query({}).collectionWhereOrderQuery.adapter({
       service,
       ...processedQuery.convexQueryProps,
+      order: processedQuery.convexQueryProps.order ?? "desc",
     });
-
-    const docs = processedQuery.processResult(rawDocs);
 
     return {
       docs,
@@ -485,11 +489,11 @@ export async function findGlobalVersions(
   });
 
   const totalPages = Math.ceil(totalDocs / limit);
-  const hasNextPage = page < totalPages;
-  const hasPrevPage = page > 1;
-  const pagingCounter = (page - 1) * limit + 1;
+  const hasNextPage = effectivePage < totalPages;
+  const hasPrevPage = effectivePage > 1;
+  const pagingCounter = (effectivePage - 1) * limit + 1;
 
-  // Fetch all matching documents with order, then slice for pagination
+  // Fetch all matching documents with order, then apply post-sort and slice for pagination
   const skipAmount = skip !== undefined ? skip : (effectivePage - 1) * limit;
 
   const allDocs = await service.db.query({}).collectionWhereOrderQuery.adapter({
@@ -498,8 +502,14 @@ export async function findGlobalVersions(
     order: processedQuery.convexQueryProps.order ?? "desc",
   });
 
-  const rawDocs = allDocs.slice(skipAmount, skipAmount + limit);
-  const docs = processedQuery.processResult(rawDocs);
+  // Apply in-memory sort if the requested sort field differs from Convex's default (_creationTime)
+  const sortedDocs = applySortField(
+    allDocs,
+    processedQuery.convexQueryProps.sortField,
+    processedQuery.convexQueryProps.order ?? "desc"
+  );
+
+  const docs = sortedDocs.slice(skipAmount, skipAmount + limit);
 
   return {
     docs,

@@ -134,7 +134,7 @@ async function unsetLatestOnOlderVersions(props: {
         service.db.mutation({}).patch.adapter({
           service,
           id: doc._id as string,
-          data: { latest: undefined }, // Unset the field
+          data: { latest: false }, // Set to false (undefined is stripped by Convex patch)
         })
       )
     );
@@ -189,7 +189,7 @@ async function unsetLatestOnOlderGlobalVersions(props: {
         service.db.mutation({}).patch.adapter({
           service,
           id: doc._id as string,
-          data: { latest: undefined }, // Unset the field
+          data: { latest: false }, // Set to false (undefined is stripped by Convex patch)
         })
       )
     );
@@ -243,14 +243,7 @@ export async function create(props: AdapterCreateProps) {
     id: docId as string,
   });
 
-  // Process result through queryProcessor for format conversion and post-filters
-  const processedQuery = service.tools.queryProcessor({
-    service,
-    ...incomingCreate,
-    convex: false,
-  });
-
-  return processedQuery.processResult(doc) as Awaited<ReturnType<Create>>;
+  return doc as Awaited<ReturnType<Create>>;
 }
 
 /**
@@ -298,15 +291,7 @@ export async function createGlobal(props: AdapterCreateGlobalProps) {
     id: docId as string,
   });
 
-  // Process result through queryProcessor for format conversion and post-filters
-  const processedQuery = service.tools.queryProcessor({
-    service,
-    ...incomingCreateGlobal,
-    collection: globalCollection,
-    convex: false,
-  });
-
-  return processedQuery.processResult(doc) as Awaited<ReturnType<CreateGlobal>>;
+  return doc as Awaited<ReturnType<CreateGlobal>>;
 }
 
 /**
@@ -376,11 +361,15 @@ export async function createVersion(props: AdapterCreateVersionProps) {
   });
 
   // STEP 2: Prepare and insert the new version document
+  // NOTE: We store createdAt as pca_createdAt to prevent the key transformer
+  // from mapping it to _creationTime (a read-only Convex system field that gets
+  // stripped during insertion). The pca_ prefix round-trips correctly:
+  // pca_createdAt → stored as-is → read back → pca_ stripped → createdAt
   const versionDoc: Record<string, unknown> = {
     parent,
     version: versionData,
     autosave,
-    createdAt,
+    pca_createdAt: createdAt,
     updatedAt,
     publishedLocale,
     latest: true, // Mark as latest version
@@ -414,18 +403,7 @@ export async function createVersion(props: AdapterCreateVersionProps) {
     id: docId as string,
   });
 
-  // Process result through queryProcessor for format conversion and post-filters
-  const processedQuery = service.tools.queryProcessor({
-    service,
-    ...incomingCreateVersion,
-    collection: versionsCollection,
-    locale: publishedLocale,
-    convex: false,
-  });
-
-  return processedQuery.processResult(doc) as Awaited<
-    ReturnType<CreateVersion>
-  >;
+  return doc as Awaited<ReturnType<CreateVersion>>;
 }
 
 /**
@@ -493,10 +471,14 @@ export async function createGlobalVersion(
   });
 
   // STEP 2: Prepare and insert the new global version document
+  // NOTE: We store createdAt as pca_createdAt to prevent the key transformer
+  // from mapping it to _creationTime (a read-only Convex system field that gets
+  // stripped during insertion). The pca_ prefix round-trips correctly:
+  // pca_createdAt → stored as-is → read back → pca_ stripped → createdAt
   const versionDoc: Record<string, unknown> = {
     version: versionData,
     autosave,
-    createdAt,
+    pca_createdAt: createdAt,
     updatedAt,
     publishedLocale,
     latest: true, // Mark as latest version
@@ -529,18 +511,7 @@ export async function createGlobalVersion(
     id: docId as string,
   });
 
-  // Process result through queryProcessor for format conversion and post-filters
-  const processedQuery = service.tools.queryProcessor({
-    service,
-    ...incomingCreateGlobalVersion,
-    collection: globalVersionsCollection,
-    locale: publishedLocale,
-    convex: false,
-  });
-
-  return processedQuery.processResult(doc) as Awaited<
-    ReturnType<CreateGlobalVersion>
-  >;
+  return doc as Awaited<ReturnType<CreateGlobalVersion>>;
 }
 
 /**
