@@ -19,7 +19,7 @@
  */
 
 import type { AdapterService } from "../adapter/service";
-import {
+import type {
   Find,
   FindOne,
   FindDistinct,
