@@ -23,9 +23,6 @@ import {
   type BaseDatabaseAdapter,
   type Payload,
   type DatabaseAdapterObj,
-  type TypeWithID,
-  type JsonObject,
-  type TypeWithVersion,
   type PaginatedDocs,
   type CreateGlobal,
   type CreateVersion,
@@ -34,6 +31,54 @@ import {
   type UpdateVersion,
   type UpdateGlobalVersion,
   createDatabaseAdapter,
+
+  // Transaction types
+  type BeginTransaction,
+  type CommitTransaction,
+  type RollbackTransaction,
+
+  // Count types
+  type Count,
+  type CountVersions,
+  type CountGlobalVersions,
+
+  // Create types
+  type Create,
+  type CreateMigration,
+  type CreateGlobalArgs,
+  type CreateVersionArgs,
+  type CreateGlobalVersionArgs,
+
+  // Find types
+  type Find,
+  type FindOne,
+  type FindDistinct,
+  type FindGlobal,
+  type FindVersions,
+  type FindGlobalVersions,
+
+  // Delete types
+  type DeleteOne,
+  type DeleteMany,
+  type DeleteVersions,
+
+  // Update types
+  type UpdateOne,
+  type UpdateMany,
+  type UpdateJobs,
+  type UpdateGlobalArgs,
+  type UpdateVersionArgs,
+  type UpdateGlobalVersionArgs,
+
+  // Upsert types
+  type Upsert,
+
+  // Draft types
+  type QueryDrafts,
+
+  // Migration types
+  type Migration
+
 } from "payload";
 
 import { createAdapterService } from "./service";
@@ -118,18 +163,18 @@ export function convexAdapter(props: PayloadConvexAdapterProps) {
         migrationDir: "./migrations",
 
         // Transaction Bindings
-        beginTransaction: async () => {
+        beginTransaction: async (props: BeginTransaction) => {
           return await service.db.bindings.transactions.beginTransaction({
             service: service,
           });
         },
-        commitTransaction: async (id) => {
+        commitTransaction: async (id: CommitTransaction) => {
           return await service.db.bindings.transactions.commitTransaction({
             service: service,
             incomingID: id,
           });
         },
-        rollbackTransaction: async (id) => {
+        rollbackTransaction: async (id: RollbackTransaction) => {
           return await service.db.bindings.transactions.rollbackTransaction({
             service: service,
             incomingID: id,
@@ -137,21 +182,21 @@ export function convexAdapter(props: PayloadConvexAdapterProps) {
         },
 
         // Counts
-        count: async (countProps) => {
+        count: async (countProps: Count) => {
           return await service.db.bindings.counts.count({
             service: service,
             incomingCount: countProps,
           });
         },
 
-        countVersions: async (countVersionsProps) => {
+        countVersions: async (countVersionsProps: CountVersions) => {
           return await service.db.bindings.counts.countVersions({
             service: service,
             incomingCountVersions: countVersionsProps,
           });
         },
 
-        countGlobalVersions: async (countGlobalVersionsProps) => {
+        countGlobalVersions: async (countGlobalVersionsProps: CountGlobalVersions) => {
           return await service.db.bindings.counts.countGlobalVersions({
             service: service,
             incomingCountGlobalVersions: countGlobalVersionsProps,
@@ -159,35 +204,35 @@ export function convexAdapter(props: PayloadConvexAdapterProps) {
         },
 
         // Create
-        create: async (createProps) => {
+        create: async (createProps: Create) => {
           return await service.db.bindings.creates.create({
             service: service,
             incomingCreate: createProps,
           });
         },
 
-        createGlobal: (async (createGlobalProps) => {
+        createGlobal: (async (createGlobalProps: CreateGlobalArgs) => {
           return await service.db.bindings.creates.createGlobal({
             service: service,
             incomingCreateGlobal: createGlobalProps,
           });
         }) as CreateGlobal,
 
-        createVersion: (async (createVersionProps) => {
+        createVersion: (async (createVersionProps: CreateVersionArgs) => {
           return await service.db.bindings.creates.createVersion({
             service: service,
             incomingCreateVersion: createVersionProps,
           });
         }) as CreateVersion,
 
-        createGlobalVersion: (async (createGlobalVersionProps) => {
+        createGlobalVersion: (async (createGlobalVersionProps: CreateGlobalVersionArgs) => {
           return await service.db.bindings.creates.createGlobalVersion({
             service: service,
             incomingCreateGlobalVersion: createGlobalVersionProps,
           });
         }) as CreateGlobalVersion,
 
-        createMigration: async (createMigrationProps) => {
+        createMigration: async (createMigrationProps: CreateMigration) => {
           return await service.db.bindings.creates.createMigration({
             service: service,
             incomingCreateMigration: createMigrationProps,
@@ -195,42 +240,42 @@ export function convexAdapter(props: PayloadConvexAdapterProps) {
         },
 
         // Find
-        find: async (findProps) => {
+        find: async (findProps: Find) => {
           return (await service.db.bindings.finds.find({
             service: service,
             incomingFind: findProps,
           })) as any;
         },
 
-        findOne: async (findOneProps) => {
+        findOne: async (findOneProps: FindOne) => {
           return (await service.db.bindings.finds.findOne({
             service: service,
             incomingFindOne: findOneProps,
           })) as any;
         },
 
-        findDistinct: async (findDistinctProps) => {
+        findDistinct: async (findDistinctProps: FindDistinct) => {
           return (await service.db.bindings.finds.findDistinct({
             service: service,
             incomingFindDistinct: findDistinctProps,
           })) as any;
         },
 
-        findGlobal: async (findGlobalProps) => {
+        findGlobal: async (findGlobalProps: FindGlobal) => {
           return (await service.db.bindings.finds.findGlobal({
             service: service,
             incomingFindGlobal: findGlobalProps,
           })) as any;
         },
 
-        findVersions: async (findVersionsProps) => {
+        findVersions: async (findVersionsProps: FindVersions) => {
           return (await service.db.bindings.finds.findVersions({
             service: service,
             incomingFindVersions: findVersionsProps,
           })) as any;
         },
 
-        findGlobalVersions: async (findGlobalVersionsProps) => {
+        findGlobalVersions: async (findGlobalVersionsProps: FindGlobalVersions) => {
           return (await service.db.bindings.finds.findGlobalVersions({
             service: service,
             incomingFindGlobalVersions: findGlobalVersionsProps,
@@ -238,21 +283,21 @@ export function convexAdapter(props: PayloadConvexAdapterProps) {
         },
 
         // Delete
-        deleteOne: async (deleteOneProps) => {
+        deleteOne: async (deleteOneProps: DeleteOne) => {
           return await service.db.bindings.deletes.deleteOne({
             service: service,
             incomingDeleteOne: deleteOneProps,
           });
         },
 
-        deleteMany: async (deleteManyProps) => {
+        deleteMany: async (deleteManyProps: DeleteMany) => {
           return await service.db.bindings.deletes.deleteMany({
             service: service,
             incomingDeleteMany: deleteManyProps,
           });
         },
 
-        deleteVersions: async (deleteVersionsProps) => {
+        deleteVersions: async (deleteVersionsProps: DeleteVersions) => {
           const result = await service.db.bindings.deletes.deleteVersions({
             service: service,
             incomingDeleteVersions: deleteVersionsProps,
@@ -265,42 +310,42 @@ export function convexAdapter(props: PayloadConvexAdapterProps) {
         },
 
         // Update
-        updateOne: async (updateOneProps) => {
+        updateOne: async (updateOneProps: UpdateOne) => {
           return await service.db.bindings.updates.updateOne({
             service: service,
             incomingUpdateOne: updateOneProps,
           });
         },
 
-        updateMany: async (updateManyProps) => {
+        updateMany: async (updateManyProps: UpdateMany) => {
           return await service.db.bindings.updates.updateMany({
             service: service,
             incomingUpdateMany: updateManyProps,
           });
         },
 
-        updateGlobal: (async (updateGlobalProps) => {
+        updateGlobal: (async (updateGlobalProps: UpdateGlobalArgs) => {
           return await service.db.bindings.updates.updateGlobal({
             service: service,
             incomingUpdateGlobal: updateGlobalProps,
           });
         }) as UpdateGlobal,
 
-        updateVersion: (async (updateVersionProps) => {
+        updateVersion: (async (updateVersionProps: UpdateVersionArgs) => {
           return await service.db.bindings.updates.updateVersion({
             service: service,
             incomingUpdateVersion: updateVersionProps,
           });
         }) as UpdateVersion,
 
-        updateGlobalVersion: (async (updateGlobalVersionProps) => {
+        updateGlobalVersion: (async (updateGlobalVersionProps: UpdateGlobalVersionArgs) => {
           return await service.db.bindings.updates.updateGlobalVersion({
             service: service,
             incomingUpdateGlobalVersion: updateGlobalVersionProps,
           });
         }) as UpdateGlobalVersion,
 
-        updateJobs: async (updateJobsProps) => {
+        updateJobs: async (updateJobsProps: UpdateJobs) => {
           return await service.db.bindings.updates.updateJobs({
             service: service,
             incomingUpdateJobs: updateJobsProps,
@@ -308,7 +353,7 @@ export function convexAdapter(props: PayloadConvexAdapterProps) {
         },
 
         // Upsert
-        upsert: async (upsertProps) => {
+        upsert: async (upsertProps: Upsert) => {
           return await service.db.bindings.upserts.upsert({
             service: service,
             incomingUpsert: upsertProps,
@@ -316,7 +361,7 @@ export function convexAdapter(props: PayloadConvexAdapterProps) {
         },
 
         // Query Drafts
-        queryDrafts: async (queryDraftsProps) => {
+        queryDrafts: async (queryDraftsProps: QueryDrafts) => {
           return (await service.db.bindings.drafts.queryDrafts({
             service: service,
             incomingQueryDrafts: queryDraftsProps,
@@ -324,7 +369,7 @@ export function convexAdapter(props: PayloadConvexAdapterProps) {
         },
 
         // Migration Functions
-        migrate: async (migrateProps) => {
+        migrate: async (migrateProps: Migration) => {
           return await service.db.bindings.migrations.migrate({
             service: service,
             incomingMigrate: migrateProps,
@@ -337,7 +382,7 @@ export function convexAdapter(props: PayloadConvexAdapterProps) {
           });
         },
 
-        migrateFresh: async (migrateFreshProps) => {
+        migrateFresh: async () => {
           return await service.db.bindings.migrations.migrateFresh({
             service: service,
           });

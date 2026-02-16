@@ -61,7 +61,7 @@ export async function queryDrafts(props: AdapterQueryDraftsProps) {
     limit = 10,
     page = 1,
     pagination = true,
-  } = incomingQueryDrafts;
+  } = incomingQueryDrafts as any;
 
   // Query the versions collection (not the main collection)
   const versionsCollection = `${collection}_versions`;
@@ -109,7 +109,7 @@ export async function queryDrafts(props: AdapterQueryDraftsProps) {
   // Pass all incoming params to queryProcessor with versions collection
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingQueryDrafts,
+    ...(incomingQueryDrafts as any),
     collection: versionsCollection,
     where: combinedWhere,
     convex: false,

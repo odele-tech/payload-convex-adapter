@@ -185,7 +185,7 @@ export async function updateOne(props: AdapterUpdateOneProps) {
     where,
     draft,
     returning = true,
-  } = incomingUpdateOne;
+  } = incomingUpdateOne as any;
 
   let docId: string;
 
@@ -196,7 +196,7 @@ export async function updateOne(props: AdapterUpdateOneProps) {
     // Otherwise, find the document using the where clause
     const processedQuery = service.tools.queryProcessor({
       service,
-      ...incomingUpdateOne,
+      ...(incomingUpdateOne as any),
       limit: 1,
       convex: false,
     });
@@ -278,12 +278,12 @@ export async function updateMany(props: AdapterUpdateManyProps) {
     draft,
     limit,
     returning = true,
-  } = incomingUpdateMany;
+  } = incomingUpdateMany as any;
 
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingUpdateMany,
+    ...(incomingUpdateMany as any),
     convex: false,
   });
 
@@ -353,7 +353,7 @@ export async function updateMany(props: AdapterUpdateManyProps) {
  */
 export async function updateGlobal(props: AdapterUpdateGlobalProps) {
   const { service, incomingUpdateGlobal } = props;
-  const { slug, data, returning = true } = incomingUpdateGlobal;
+  const { slug, data, returning = true } = incomingUpdateGlobal as any;
 
   // Globals are stored in a collection named after the slug
   const globalCollection = `_globals_${slug}`;
@@ -426,7 +426,7 @@ export async function updateVersion(props: AdapterUpdateVersionProps) {
     id,
     where,
     returning = true,
-  } = incomingUpdateVersion;
+  } = incomingUpdateVersion as any;
 
   // Versions are stored in a collection with "_versions" suffix
   const versionsCollection = `${collection}_versions`;
@@ -440,7 +440,7 @@ export async function updateVersion(props: AdapterUpdateVersionProps) {
     // Otherwise, find the version using the where clause
     const processedQuery = service.tools.queryProcessor({
       service,
-      ...incomingUpdateVersion,
+      ...(incomingUpdateVersion as any),
       collection: versionsCollection,
       limit: 1,
       convex: false,
@@ -520,7 +520,7 @@ export async function updateGlobalVersion(
     id,
     where,
     returning = true,
-  } = incomingUpdateGlobalVersion;
+  } = incomingUpdateGlobalVersion as any;
 
   // Global versions are stored in a collection with "_global_versions" suffix
   const globalVersionsCollection = `${global}_global_versions`;
@@ -534,7 +534,7 @@ export async function updateGlobalVersion(
     // Otherwise, find the version using the where clause
     const processedQuery = service.tools.queryProcessor({
       service,
-      ...incomingUpdateGlobalVersion,
+      ...(incomingUpdateGlobalVersion as any),
       collection: globalVersionsCollection,
       limit: 1,
       convex: false,
@@ -608,7 +608,7 @@ export async function updateGlobalVersion(
  */
 export async function updateJobs(props: AdapterUpdateJobsProps) {
   const { service, incomingUpdateJobs } = props;
-  const { data, id, where, limit, returning = true } = incomingUpdateJobs;
+  const { data, id, where, limit, returning = true } = incomingUpdateJobs as any;
 
   const jobsCollection = "_jobs";
 
@@ -640,7 +640,7 @@ export async function updateJobs(props: AdapterUpdateJobsProps) {
     // Pass all incoming params to queryProcessor
     const processedQuery = service.tools.queryProcessor({
       service,
-      ...incomingUpdateJobs,
+      ...(incomingUpdateJobs as any),
       collection: jobsCollection,
       convex: false,
     });

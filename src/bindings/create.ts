@@ -219,7 +219,7 @@ async function unsetLatestOnOlderGlobalVersions(props: {
  */
 export async function create(props: AdapterCreateProps) {
   const { service, incomingCreate } = props;
-  const { collection, data, draft, returning = true } = incomingCreate;
+  const { collection, data, draft, returning = true } = incomingCreate as any;
 
   // Prepare document data with draft status if applicable
   const documentData = draft ? { ...data, _status: "draft" } : data;
@@ -267,7 +267,7 @@ export async function create(props: AdapterCreateProps) {
  */
 export async function createGlobal(props: AdapterCreateGlobalProps) {
   const { service, incomingCreateGlobal } = props;
-  const { slug, data, returning = true } = incomingCreateGlobal;
+  const { slug, data, returning = true } = incomingCreateGlobal as any;
 
   // Globals are stored in a collection named after the slug
   const globalCollection = `_globals_${slug}`;
@@ -346,7 +346,7 @@ export async function createVersion(props: AdapterCreateVersionProps) {
     publishedLocale,
     returning = true,
     snapshot,
-  } = incomingCreateVersion;
+  } = incomingCreateVersion as any;
 
   // Versions are stored in a collection with "_versions" suffix
   const versionsCollection = `${collectionSlug}_versions`;
@@ -457,7 +457,7 @@ export async function createGlobalVersion(
     publishedLocale,
     returning = true,
     snapshot,
-  } = incomingCreateGlobalVersion;
+  } = incomingCreateGlobalVersion as any;
 
   // Global versions are stored in a collection with "_global_versions" suffix
   const globalVersionsCollection = `${globalSlug}_global_versions`;

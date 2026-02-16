@@ -55,7 +55,7 @@ export async function count(props: AdapaterCountProps) {
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingCount,
+    ...(incomingCount as any),
     convex: false,
   });
 
@@ -79,7 +79,7 @@ export async function count(props: AdapaterCountProps) {
  */
 export async function countVersions(props: AdapaterCountVersionsProps) {
   const { service, incomingCountVersions } = props;
-  const { collection } = incomingCountVersions;
+  const { collection } = incomingCountVersions as any;
 
   // Versions are stored in a collection with "_versions" suffix
   const versionsCollection = `${collection}_versions`;
@@ -87,7 +87,7 @@ export async function countVersions(props: AdapaterCountVersionsProps) {
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingCountVersions,
+    ...(incomingCountVersions as any),
     collection: versionsCollection,
     convex: false,
   });
@@ -114,7 +114,7 @@ export async function countGlobalVersions(
   props: AdapaterCountGlobalVersionsProps
 ) {
   const { service, incomingCountGlobalVersions } = props;
-  const { global } = incomingCountGlobalVersions;
+  const { global } = incomingCountGlobalVersions as any;
 
   // Global versions are stored in a collection with "_global_versions" suffix
   const globalVersionsCollection = `${global}_global_versions`;
@@ -122,7 +122,7 @@ export async function countGlobalVersions(
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingCountGlobalVersions,
+    ...(incomingCountGlobalVersions as any),
     collection: globalVersionsCollection,
     convex: false,
   });

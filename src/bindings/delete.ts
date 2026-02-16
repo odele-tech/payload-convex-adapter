@@ -74,12 +74,12 @@ export type AdapterDeleteVersionsProps = {
  */
 export async function deleteOne(props: AdapterDeleteOneProps) {
   const { service, incomingDeleteOne } = props;
-  const { returning = true } = incomingDeleteOne;
+  const { returning = true } = incomingDeleteOne as any;
 
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingDeleteOne,
+    ...(incomingDeleteOne as any),
     convex: false,
   });
 
@@ -135,7 +135,7 @@ export async function deleteMany(props: AdapterDeleteManyProps) {
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingDeleteMany,
+    ...(incomingDeleteMany as any),
     convex: false,
   });
 
@@ -186,7 +186,7 @@ export async function deleteMany(props: AdapterDeleteManyProps) {
  */
 export async function deleteVersions(props: AdapterDeleteVersionsProps) {
   const { service, incomingDeleteVersions } = props;
-  const { collection, globalSlug, where, locale } = incomingDeleteVersions;
+  const { collection, globalSlug, where, locale } = incomingDeleteVersions as any;
 
   // Determine the versions collection name
   // Collection versions use "_versions" suffix, global versions use "_global_versions" suffix

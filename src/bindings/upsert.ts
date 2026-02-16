@@ -129,12 +129,12 @@ export type AdapterUpsertProps = {
  */
 export async function upsert(props: AdapterUpsertProps) {
   const { service, incomingUpsert } = props;
-  const { collection, data, returning = true } = incomingUpsert;
+  const { collection, data, returning = true } = incomingUpsert as any;
 
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingUpsert,
+    ...(incomingUpsert as any),
     limit: 1,
     convex: false,
   });

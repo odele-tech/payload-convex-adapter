@@ -123,7 +123,7 @@ export async function find(props: AdapterFindProps) {
     page = 1,
     pagination = true,
     skip,
-  } = incomingFind;
+  } = incomingFind as any;
 
   // Use skip if provided (deprecated but still supported)
   const effectivePage =
@@ -132,7 +132,7 @@ export async function find(props: AdapterFindProps) {
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingFind,
+    ...(incomingFind as any),
     page: effectivePage,
     convex: false,
   });
@@ -211,7 +211,7 @@ export async function findOne(props: AdapterFindOneProps) {
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingFindOne,
+    ...(incomingFindOne as any),
     limit: 1,
     convex: false,
   });
@@ -241,12 +241,12 @@ export async function findOne(props: AdapterFindOneProps) {
  */
 export async function findDistinct(props: AdapterFindDistinctProps) {
   const { service, incomingFindDistinct } = props;
-  const { field, limit = 10, page = 1 } = incomingFindDistinct;
+  const { field, limit = 10, page = 1 } = incomingFindDistinct as any;
 
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingFindDistinct,
+    ...(incomingFindDistinct as any),
     convex: false,
   });
 
@@ -301,7 +301,7 @@ export async function findDistinct(props: AdapterFindDistinctProps) {
  */
 export async function findGlobal(props: AdapterFindGlobalProps) {
   const { service, incomingFindGlobal } = props;
-  const { slug } = incomingFindGlobal;
+  const { slug } = incomingFindGlobal as any;
 
   // Globals are stored in a collection named after the slug
   const globalCollection = `_globals_${slug}`;
@@ -309,7 +309,7 @@ export async function findGlobal(props: AdapterFindGlobalProps) {
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingFindGlobal,
+    ...(incomingFindGlobal as any),
     collection: globalCollection,
     limit: 1,
     convex: false,
@@ -345,7 +345,7 @@ export async function findVersions(props: AdapterFindVersionsProps) {
     page = 1,
     pagination = true,
     skip,
-  } = incomingFindVersions;
+  } = incomingFindVersions as any;
 
   // Use skip if provided (deprecated but still supported)
   const effectivePage =
@@ -357,7 +357,7 @@ export async function findVersions(props: AdapterFindVersionsProps) {
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingFindVersions,
+    ...(incomingFindVersions as any),
     collection: versionsCollection,
     page: effectivePage,
     convex: false,
@@ -444,7 +444,7 @@ export async function findGlobalVersions(
     page = 1,
     pagination = true,
     skip,
-  } = incomingFindGlobalVersions;
+  } = incomingFindGlobalVersions as any;
 
   // Use skip if provided (deprecated but still supported)
   const effectivePage =
@@ -456,7 +456,7 @@ export async function findGlobalVersions(
   // Pass all incoming params to queryProcessor
   const processedQuery = service.tools.queryProcessor({
     service,
-    ...incomingFindGlobalVersions,
+    ...(incomingFindGlobalVersions as any),
     collection: globalVersionsCollection,
     page: effectivePage,
     convex: false,
