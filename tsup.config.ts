@@ -9,7 +9,7 @@ export default defineConfig({
   format: ["esm"],
   dts: true,
   splitting: false,
-  sourcemap: false,
+  sourcemap: true,
   clean: false,
   treeshake: false,
   external: ["payload", "convex", "@payloadcms/db-postgres"],
