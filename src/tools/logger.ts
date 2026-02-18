@@ -2,18 +2,52 @@
  * @fileoverview Logging Utilities for Payload Convex Adapter
  *
  * This module provides simple logging for Convex operations.
- * Strings get a prefix, objects/arrays get JSON.stringify.
+ * Strings get a prefix, objects/arrays are recursively serialized
+ * so that deeply-nested values never appear as "[object Object]".
  *
  * ## Usage
  * ```typescript
  * const serviceLogger = createServiceLogger({ prefix: 'my_app' });
- * 
+ *
  * serviceLogger('Operation started').log();
  * serviceLogger({ fn: 'getById', result: doc }).log();
  * ```
  *
  * @module tools/logger
  */
+
+/**
+ * Recursively serializes any value to a human-readable string.
+ *
+ * - Strings are returned as-is.
+ * - `null` / `undefined` are coerced to their string representation.
+ * - Circular references are replaced with the placeholder `"[Circular]"`.
+ * - All other values (objects, arrays, primitives) are serialized with
+ *   `JSON.stringify` using 2-space indentation so nested structures are
+ *   fully expanded rather than collapsing to "[object Object]".
+ *
+ * @param value - The value to serialize.
+ * @returns A fully-expanded string representation of the value.
+ */
+function serialize(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+
+  const seen: object[] = [];
+
+  return JSON.stringify(
+    value,
+    (_key, val) => {
+      if (typeof val === "object" && val !== null) {
+        if (seen.indexOf(val) !== -1) return "[Circular]";
+        seen.push(val);
+      }
+      return val;
+    },
+    2
+  );
+}
 
 /**
  * Props for creating a service logger.
@@ -41,7 +75,7 @@ export type ServiceLogger = (message: string | object | unknown[]) => Logger;
  * // Log a string
  * serviceLogger('Operation started').log();
  *
- * // Log an object
+ * // Log an object (deeply nested values are fully expanded)
  * serviceLogger({ fn: 'getById', props: { id: '123' } }).log();
  *
  * // Log an array
@@ -54,18 +88,9 @@ export function createServiceLogger(
   const { prefix } = props;
 
   const serviceLogger = (message: string | object | unknown[]): Logger => {
-    if (typeof message === "string") {
-      const formattedMessage = `PayloadConvexAdapter [${prefix}]: ${message}`;
-      return logger({ message: formattedMessage });
-    } else {
-      // Log prefix and object separately so console formats the object nicely
-      const prefixMessage = `PayloadConvexAdapter [${prefix}]:`;
-      return {
-        log: () => console.log(prefixMessage, message),
-        error: () => console.error(prefixMessage, message),
-        warn: () => console.warn(prefixMessage, message),
-      };
-    }
+    const serialized = serialize(message);
+    const formattedMessage = `PayloadConvexAdapter [${prefix}]: ${serialized}`;
+    return logger({ message: formattedMessage });
   };
 
   return serviceLogger;
