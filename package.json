@@ -32,6 +32,10 @@
     "./safe-service": {
       "types": "./dist/adapter/safe-service.d.ts",
       "default": "./dist/adapter/safe-service.js"
+    },
+    "./try-catch": {
+      "types": "./dist/try-catch.d.ts",
+      "default": "./dist/try-catch.js"
     }
   },
   "scripts": {
